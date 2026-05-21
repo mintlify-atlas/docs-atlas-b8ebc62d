@@ -1,0 +1,88 @@
+---
+title: "Create and verify a UniMaps account"
+description: "Register for UniMaps, verify your email, and activate your account. Covers the two-phase signup flow, required fields, and your secure backup email."
+---
+
+Creating a UniMaps account is a two-phase process: you fill in a registration form, then confirm your identity by clicking a link sent to your email address. Your account is not active until the verification step is complete.
+
+## What you need before you start
+
+You need two distinct email addresses to register:
+
+- **Primary email (`email`)** — the address you will use to log in.
+- **Secure email (`secure_email`)** — a backup address used for two-factor authentication fallback and secure key recovery. It must be different from your primary email.
+
+Both addresses are required. You cannot complete registration without providing them.
+
+## Required fields
+
+| Field | Description |
+|---|---|
+| `nombres` | Your given name(s). Letters and spaces only. |
+| `apellidos` | Your surname(s). Letters and spaces only. |
+| `email` | Your primary email address. Must be unique in UniMaps. |
+| `secure_email` | A backup email address, different from your primary. |
+| `password` | Your chosen password — minimum 8 characters. |
+| `password_confirmation` | Must match `password` exactly. |
+
+<Info>
+Name fields (`nombres` and `apellidos`) only accept letters and spaces, including accented Spanish characters. Numbers and symbols are not allowed.
+</Info>
+
+## Password requirements
+
+Your password must be at least **8 characters** long. The registration form shows a strength indicator as you type — aim for a score of "Fuerte" or higher by combining uppercase letters, lowercase letters, numbers, and symbols.
+
+## Registration flow
+
+<Steps>
+  <Step title="Fill in the registration form">
+    Navigate to the Register page and enter your first name, last name, primary email, secure backup email, and a password. Confirm the password in the second password field.
+  </Step>
+  <Step title="Submit the form">
+    Click **Crear cuenta**. UniMaps sends a verification email to your primary address and shows a "Revisa tu correo" screen. Your account record is created in a pending state — it is not yet active.
+  </Step>
+  <Step title="Check your inbox">
+    Open the verification email from UniMaps. It contains a unique confirmation link that is valid for **24 hours**.
+  </Step>
+  <Step title="Click the verification link">
+    Clicking the link opens UniMaps in your browser and automatically verifies your email address.
+  </Step>
+  <Step title="Account activated">
+    Once verified, your account status changes to `activo`. UniMaps also generates your **secure key** (.jw file) at this point. You are redirected to the campus map.
+  </Step>
+  <Step title="Download your secure key">
+    After your first login, a banner appears in the dashboard prompting you to download your `.jw` recovery file. Download and store it in a safe place immediately.
+  </Step>
+</Steps>
+
+## What happens after verification
+
+When your email is confirmed, three things happen automatically:
+
+1. Your account is marked `activo` and you can log in.
+2. A unique secure key is generated and stored for your account.
+3. You are redirected to the campus map view.
+
+## The role of your secure email
+
+Your `secure_email` address is not used for day-to-day login. It serves two specific purposes:
+
+- **Two-factor authentication fallback** — if your primary inbox is unavailable, the 2FA code can be retrieved via your secure address.
+- **Secure key delivery** — if you lose your `.jw` recovery file, you can request that UniMaps send it to your secure email address.
+
+<Note>
+Keep your secure email address accessible. If you lose both your password and your `.jw` file, and you no longer have access to your secure email, account recovery will not be possible.
+</Note>
+
+## Resending the verification email
+
+If the verification link expires or you don't receive the email, click **Reenviar correo** on the verification screen. A new link will be sent to your primary email address. Each link is valid for 24 hours.
+
+```json
+POST /api/auth/resend-verification
+
+{
+  "email": "tu@correo.com"
+}
+```

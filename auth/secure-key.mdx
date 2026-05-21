@@ -1,0 +1,85 @@
+---
+title: "Secure Key Recovery: Access Without a Password"
+description: "How the UniMaps .jw secure key file works — when to use it, how to download it, how to log in with it, and how to recover it via your backup email address."
+---
+
+UniMaps generates a unique recovery file for every account at the moment email verification is completed. This file — saved with a `.jw` extension — lets you log in without your password if you ever lose access to it or to your email inbox.
+
+## What the secure key is
+
+The `.jw` file is a plain-text recovery credential tied exclusively to your account. It contains 128 lines of cryptographic hash data generated from your primary email, your secure backup email, and the application's secret key using HMAC-SHA256. No two users share the same key.
+
+When you present the file during login, the server recomputes the expected hash from your account data and compares it against the file you uploaded. If they match, you are granted access.
+
+<Warning>
+Your `.jw` file grants full access to your UniMaps account — no password required. Treat it like a physical key. Do not share it, do not store it in a publicly accessible location, and do not send it over unencrypted channels.
+</Warning>
+
+## When to use the secure key
+
+Use your `.jw` file when:
+
+- You have forgotten your password and the standard password recovery flow is not available.
+- You no longer have access to the email inbox associated with your account.
+- You want a fast, offline-capable backup login method.
+
+## Downloading your secure key
+
+After your first login, a banner appears in the dashboard prompting you to download your recovery file. You can also request a fresh download at any time using an authenticated API call:
+
+```http
+GET /api/auth/secure-key-download
+Authorization: Bearer <your_token>
+```
+
+The server responds with the file as a download attachment named `para ti crack.jw`. Save this file to a secure location such as an encrypted password manager, an offline USB drive, or a similarly protected storage medium.
+
+<Tip>
+Download and store your `.jw` file immediately after creating your account. If you later forget your password and have never downloaded the file, your only remaining recovery option is your secure backup email.
+</Tip>
+
+## Logging in with the secure key
+
+To use the `.jw` file to access your account:
+
+1. Go to the login page and click **Ingresar con clave segura**.
+2. Enter your account's primary email address.
+3. Select your `.jw` file using the file picker.
+4. Click **Ingresar**.
+
+The API endpoint for this operation is:
+
+```http
+POST /api/auth/login-with-key
+Content-Type: application/json
+
+{
+  "email": "tu@correo.com",
+  "secure_key_content": "001|A1B2C3D4...\n002|F6E5D4C3..."
+}
+```
+
+`secure_key_content` is the raw text content of the `.jw` file. The frontend reads it automatically when you select the file. A successful response returns a Sanctum Bearer token identical to a normal login.
+
+<Note>
+After logging in with your secure key, UniMaps shows a notification suggesting that you set a new password. Take this opportunity to restore normal password-based access.
+</Note>
+
+## Recovering a lost .jw file via email
+
+If you no longer have the `.jw` file, you can request that UniMaps send it to your **secure backup email** address (the `secure_email` you provided during registration):
+
+```http
+POST /api/auth/send-secure-key-email
+Content-Type: application/json
+
+{
+  "email": "tu@correo.com"
+}
+```
+
+The server locates your account, generates the `.jw` file, and sends it as an attachment to your registered secure email address. Once you receive it, save the attachment and use it to log in as described above.
+
+<Warning>
+This endpoint uses your `secure_email` address as the delivery target — not your primary login email. Make sure your secure email remains accessible. If you lose access to both your `.jw` file and your secure email, account recovery is not possible.
+</Warning>

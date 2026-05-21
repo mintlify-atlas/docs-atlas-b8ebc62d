@@ -1,0 +1,177 @@
+---
+title: "Node connections and graph edges API"
+description: "Retrieve and create the directed edges that link campus nodes. Each connection stores origin, destination, and Haversine-computed distance in meters."
+---
+
+Connections are the directed edges of the campus navigation graph. Each connection links an origin node to a destination node and carries the walking distance between them in meters. The 50 pre-loaded edges form a sequential chain from node 1 (Entrada Universidad) to node 51 (Escalera Cafetería), which the routing engine traverses using Dijkstra's algorithm. You can extend the graph by posting new connections via `POST /api/nodos/conectar`.
+
+## Connection object
+
+<ResponseField name="id" type="integer">
+  Auto-incremented edge identifier.
+</ResponseField>
+
+<ResponseField name="nodo_origen_id" type="integer">
+  ID of the origin node. References the `nodos` table.
+</ResponseField>
+
+<ResponseField name="nodo_destino_id" type="integer">
+  ID of the destination node. References the `nodos` table. Must differ from `nodo_origen_id`.
+</ResponseField>
+
+<ResponseField name="distancia" type="number">
+  Walking distance between the two nodes in **meters**, calculated using the Haversine formula (Earth radius = 6 371 000 m).
+</ResponseField>
+
+---
+
+## List all connections
+
+Returns the complete set of 50 in-memory directed edges that form the current campus graph.
+
+```
+GET /api/conexiones
+```
+
+No parameters or authentication required.
+
+<CodeGroup>
+
+```bash curl
+curl -s https://your-api.example.com/api/conexiones
+```
+
+```javascript fetch
+const res = await fetch("https://your-api.example.com/api/conexiones");
+const edges = await res.json();
+```
+
+</CodeGroup>
+
+**Example response — 200 OK**
+
+```json
+[
+  { "id": 1,  "nodo_origen_id": 1,  "nodo_destino_id": 2,  "distancia": 11.81 },
+  { "id": 2,  "nodo_origen_id": 2,  "nodo_destino_id": 3,  "distancia": 11.97 },
+  { "id": 3,  "nodo_origen_id": 3,  "nodo_destino_id": 4,  "distancia": 11.98 },
+  { "id": 4,  "nodo_origen_id": 4,  "nodo_destino_id": 5,  "distancia": 7.61  },
+  { "id": 5,  "nodo_origen_id": 5,  "nodo_destino_id": 6,  "distancia": 15.99 },
+  { "id": 17, "nodo_origen_id": 17, "nodo_destino_id": 18, "distancia": 1.01  },
+  { "id": 48, "nodo_origen_id": 48, "nodo_destino_id": 49, "distancia": 7.66  },
+  { "id": 49, "nodo_origen_id": 49, "nodo_destino_id": 50, "distancia": 6.45  },
+  { "id": 50, "nodo_origen_id": 50, "nodo_destino_id": 51, "distancia": 5.19  }
+]
+```
+
+<Note>
+  The full response contains all 50 edges. The example above shows a representative subset. Total graph length is approximately 473 meters from node 1 to node 51.
+</Note>
+
+---
+
+## Connect two nodes
+
+Creates a new directed edge between two existing nodes. The connection is persisted to the `conexiones` pivot table and will be included in future calls to `GET /api/conexiones`. Optionally creates the inverse edge in the same request.
+
+```
+POST /api/nodos/conectar
+```
+
+<ParamField body="nodo_origen_id" type="integer" required>
+  ID of the origin node. Must exist in the `nodos` table.
+</ParamField>
+
+<ParamField body="nodo_destino_id" type="integer" required>
+  ID of the destination node. Must exist in the `nodos` table. Must differ from `nodo_origen_id`.
+</ParamField>
+
+<ParamField body="distancia" type="number" required>
+  Distance in meters between the two nodes. Must be `>= 0`. Typically computed with the Haversine formula from the nodes' latitude/longitude coordinates.
+</ParamField>
+
+<ParamField body="bidireccional" type="boolean">
+  When `true`, a second edge is created from `nodo_destino_id` back to `nodo_origen_id` with the same distance. Defaults to `false` (directed edge only). Uses `syncWithoutDetaching`, so calling this endpoint again for the same pair will not create duplicate edges.
+</ParamField>
+
+<CodeGroup>
+
+```bash curl — directed edge
+curl -s -X POST https://your-api.example.com/api/nodos/conectar \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nodo_origen_id": 49,
+    "nodo_destino_id": 1,
+    "distancia": 473.52
+  }'
+```
+
+```bash curl — bidirectional
+curl -s -X POST https://your-api.example.com/api/nodos/conectar \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nodo_origen_id": 17,
+    "nodo_destino_id": 10,
+    "distancia": 85.30,
+    "bidireccional": true
+  }'
+```
+
+```javascript fetch
+const res = await fetch("https://your-api.example.com/api/nodos/conectar", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    nodo_origen_id: 49,
+    nodo_destino_id: 1,
+    distancia: 473.52,
+  }),
+});
+const data = await res.json();
+```
+
+</CodeGroup>
+
+**Example response — 201 Created**
+
+```json
+{
+  "message": "Conexión creada"
+}
+```
+
+### Validation errors — 422 Unprocessable Entity
+
+```json
+{
+  "message": "El nodo de origen no existe",
+  "errors": {
+    "nodo_origen_id": ["El nodo de origen no existe"]
+  }
+}
+```
+
+| Field               | Rule                                                  |
+|---------------------|-------------------------------------------------------|
+| `nodo_origen_id`    | Required, integer, must exist in `nodos`              |
+| `nodo_destino_id`   | Required, integer, must exist in `nodos`, ≠ `origen`  |
+| `distancia`         | Required, numeric, ≥ 0                                |
+| `bidireccional`     | Optional, boolean                                     |
+
+---
+
+## Haversine distance formula
+
+All pre-loaded edge distances are calculated with the Haversine formula, which gives the great-circle distance between two points on a sphere:
+
+```
+a = sin²(Δlat/2) + cos(lat₁) · cos(lat₂) · sin²(Δlon/2)
+c = 2 · atan2(√a, √(1−a))
+d = R · c          (R = 6 371 000 m)
+```
+
+When creating a new connection, compute the distance from the origin and destination node coordinates (available from `GET /api/nodos`) and supply the result as the `distancia` field. The API does not auto-compute distance from coordinates.
+
+<Warning>
+  The in-memory graph used by `GET /api/nodos/ruta/{origen}/{destino}` is not updated when you call `POST /api/nodos/conectar`. Newly persisted edges are stored in the database but the Dijkstra routing uses the hard-coded array in `NodoController::defaultConexiones()`. Update that array and redeploy to include new edges in route calculations.
+</Warning>

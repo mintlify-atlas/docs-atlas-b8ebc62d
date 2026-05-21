@@ -1,0 +1,59 @@
+---
+title: "UniMaps: Navigate the ITFIP Campus with Ease"
+description: "UniMaps is a full-stack campus navigation app for ITFIP university, combining an interactive Leaflet map, Dijkstra-powered routing, and secure authentication."
+---
+
+UniMaps is a full-stack web application built for the ITFIP university campus. It pairs a Vue 3 single-page application with a Laravel 12 REST API to give students, staff, and visitors an interactive map, turn-by-turn campus directions, and a secure account system — all installable as a Progressive Web App.
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Create an account and start navigating the campus in minutes.
+  </Card>
+  <Card title="Campus map" icon="map" href="/features/campus-map">
+    Explore the interactive Leaflet-powered campus map.
+  </Card>
+  <Card title="Routing" icon="route" href="/features/routing">
+    Learn how Dijkstra-based routing finds the shortest path between buildings.
+  </Card>
+  <Card title="Authentication overview" icon="lock" href="/auth/overview">
+    Understand email verification, 2FA, and the secure-key recovery system.
+  </Card>
+</CardGroup>
+
+## Architecture
+
+UniMaps is split into two independent services that you run and deploy separately.
+
+| Layer | Directory | Technology |
+|---|---|---|
+| Frontend SPA | `itfip-map/` | Vue 3, Vue Router 4, Leaflet 1.9, PrimeVue 4, Vite 7 |
+| Backend API | `Clase1/` | Laravel 12, Laravel Sanctum 4, MySQL |
+
+The frontend communicates with the backend exclusively through the JSON REST API. Sanctum handles session-based authentication, and the `VITE_API_URL` environment variable points the SPA at the correct backend origin.
+
+## Key capabilities
+
+<CardGroup cols={2}>
+  <Card title="Interactive campus map" icon="map-pin">
+    Pan and zoom a Leaflet map of the ITFIP campus with labeled buildings, facilities, and points of interest.
+  </Card>
+  <Card title="Dijkstra routing" icon="route">
+    Enter an origin and destination to receive the shortest walking path calculated server-side using the Dijkstra algorithm.
+  </Card>
+  <Card title="Secure authentication" icon="shield-check">
+    Email-verified registration, optional two-factor authentication, and a downloadable `.jw` secure-key file for account recovery.
+  </Card>
+  <Card title="PWA support" icon="mobile">
+    Install UniMaps on any device. The app ships with a Web App Manifest and runs in standalone mode with geolocation access.
+  </Card>
+  <Card title="Dark and light mode" icon="sun-moon">
+    Toggle between themes at any time using the mode switcher in the top navigation bar.
+  </Card>
+  <Card title="Role-based access" icon="users">
+    Separate views and API endpoints for standard users and administrators.
+  </Card>
+</CardGroup>
+
+<Note>
+  UniMaps is installable as a Progressive Web App (PWA). On Chrome or Edge, look for the **Install** prompt in the browser address bar after you log in. Once installed, the app runs in standalone mode and can request your device's GPS for location-aware navigation.
+</Note>

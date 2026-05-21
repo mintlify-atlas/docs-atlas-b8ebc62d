@@ -1,0 +1,86 @@
+---
+title: 'Environment Variables for UniMaps'
+description: 'A complete reference for every environment variable you must set to deploy UniMaps — covering app settings, database, email, and frontend.'
+---
+
+This page lists every environment variable UniMaps reads at runtime. Before starting the backend for the first time you must copy `.env.example` to `.env` inside the `Clase1/` directory and fill in each value. Variables left at their example placeholders will cause the application to fail or behave unexpectedly.
+
+## App settings
+
+These variables control the core Laravel runtime behavior.
+
+| Variable | Required | Example value | Description |
+|---|---|---|---|
+| `APP_NAME` | Yes | `UniMaps` | Display name used in emails and the application shell. |
+| `APP_ENV` | Yes | `production` | Runtime environment. Use `local` for development, `production` for live deployments. |
+| `APP_KEY` | Yes | `base64:...` | Encryption key for sessions, cookies, and encrypted values. |
+| `APP_DEBUG` | Yes | `false` | Set to `false` in production to suppress stack traces in HTTP responses. |
+| `APP_URL` | Yes | `https://backend.up.railway.app` | Public URL of the Laravel backend. Used to build absolute links. |
+| `APP_FRONTEND_URL` | Yes | `https://frontend.up.railway.app` | Public URL of the Vue frontend. Used in email verification links and CORS. |
+| `APP_LOCALE` | No | `en` | Default locale for translated strings. |
+
+<Note>
+`APP_KEY` must never be left empty or reused between environments. Generate a unique value locally and paste it into your deployment platform's environment variable UI.
+
+```bash
+cd Clase1
+php artisan key:generate --show
+```
+
+Copy the output (starting with `base64:`) and set it as `APP_KEY`.
+</Note>
+
+### Session and authentication
+
+| Variable | Required | Example value | Description |
+|---|---|---|---|
+| `SESSION_DRIVER` | No | `database` | Storage backend for sessions. `database` is recommended for multi-instance deployments. |
+| `SESSION_LIFETIME` | No | `120` | How long (in minutes) an idle session remains valid. |
+| `SESSION_DOMAIN` | Yes (prod) | `.up.railway.app` | Domain shared by backend and frontend so the session cookie is accessible to both. |
+| `SANCTUM_STATEFUL_DOMAINS` | Yes (prod) | `frontend.up.railway.app` | Comma-separated list of frontend hostnames that may send cookie-authenticated requests. |
+| `BCRYPT_ROUNDS` | No | `12` | Cost factor for bcrypt password hashing. Higher values are slower but more secure. |
+
+## Database
+
+See [Database Setup and Schema](/configuration/database) for the full reference. The variables below are the ones you configure here in `.env`.
+
+| Variable | Required | Example value | Description |
+|---|---|---|---|
+| `DB_CONNECTION` | Yes | `mysql` | Database driver. UniMaps requires `mysql`. |
+| `DB_HOST` | Yes | `mysql.railway.internal` | Hostname of the MySQL server. |
+| `DB_PORT` | Yes | `3306` | TCP port the MySQL server listens on. |
+| `DB_DATABASE` | Yes | `unimaps` | Name of the database schema to use. |
+| `DB_USERNAME` | Yes | `unimaps_user` | MySQL user with full privileges on `DB_DATABASE`. |
+| `DB_PASSWORD` | Yes | *(secret)* | Password for `DB_USERNAME`. |
+
+## Mail / email
+
+See [Configure Email for UniMaps Notifications](/configuration/email) for the full provider setup guide.
+
+| Variable | Required | Example value | Description |
+|---|---|---|---|
+| `MAIL_MAILER` | Yes | `smtp` | Transport driver. Use `smtp` for Gmail or any SMTP relay. |
+| `MAIL_HOST` | Yes | `smtp.gmail.com` | SMTP server hostname. |
+| `MAIL_PORT` | Yes | `587` | SMTP server port. Port 587 with TLS is standard. |
+| `MAIL_USERNAME` | Yes | `no-reply@example.com` | SMTP authentication username (usually the sender address). |
+| `MAIL_PASSWORD` | Yes | *(secret)* | SMTP password or App Password. Never use your regular account password. |
+| `MAIL_ENCRYPTION` | Yes | `tls` | Transport security. Use `tls` for port 587 or `ssl` for port 465. |
+| `MAIL_FROM_ADDRESS` | Yes | `no-reply@example.com` | The `From` address shown in all outgoing emails. |
+| `MAIL_FROM_NAME` | Yes | `ITFIP Maps` | The sender name shown in all outgoing emails. |
+| `BREVO_API_KEY` | Conditional | *(secret)* | Required only when using Brevo (Sendinblue) as the email provider instead of SMTP. |
+
+## Frontend
+
+These variables are read by Vite at **build time** inside the `itfip-map/` frontend project.
+
+| Variable | Required | Example value | Description |
+|---|---|---|---|
+| `VITE_API_URL` | Yes | `https://backend.up.railway.app/api` | Full URL of the backend API, including the `/api` path prefix. The Vue app appends individual endpoint paths to this base. |
+
+<Warning>
+`VITE_API_URL` is embedded into the compiled JavaScript bundle at build time. If you change the backend URL after building, you must rebuild the frontend for the change to take effect.
+</Warning>
+
+<Tip>
+Railway provides a dedicated "Variables" tab for each service where you can add, edit, and redeploy environment variables without touching any files. Changes take effect on the next deploy. Shared variables across services (for example, `SESSION_DOMAIN`) can be set once in a shared environment and referenced in both the backend and frontend services.
+</Tip>

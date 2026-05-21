@@ -1,0 +1,135 @@
+---
+title: 'Configure Email for UniMaps Notifications'
+description: 'Configure transactional email for UniMaps via Gmail SMTP or the Brevo API. Covers App Passwords, required env vars, and testing with Mailtrap.'
+---
+
+UniMaps sends transactional emails for every significant user action that requires out-of-band verification. Without a working email configuration, users cannot complete registration, reset passwords, or receive security codes. This page explains how to configure the two supported providers — Gmail SMTP and Brevo — and lists every place in the application where email is sent.
+
+## When emails are sent
+
+UniMaps triggers outgoing email for the following events:
+
+| Event | Description |
+|---|---|
+| Registration verification | A link is emailed to the registrant. The account is not created in the `users` table until the link is clicked. |
+| Two-factor authentication | A one-time code is sent to the user's email during login when 2FA is active. |
+| Password reset | A short numeric code is sent to the user's email address to authorize a password reset. |
+| Secure key delivery | The user's API key or access credential is delivered by email. |
+| Email change verification | When a user requests an email address change, a code is sent to the new address to confirm ownership. |
+| Account deletion confirmation | The user receives a final notification when their account is permanently removed. |
+
+## Provider options
+
+<CardGroup cols={2}>
+  <Card title="Gmail SMTP" icon="mail">
+    Use your Gmail account as an SMTP relay. Requires a Google App Password. Best for low-volume deployments or when you already have a Google Workspace account.
+  </Card>
+  <Card title="Brevo (Sendinblue) API" icon="send">
+    Use the Brevo transactional email API. No SMTP relay needed. The backend calls the Brevo REST API directly using `BREVO_API_KEY`. Better for higher volumes or when you want detailed delivery analytics.
+  </Card>
+</CardGroup>
+
+## Gmail SMTP setup
+
+<Steps>
+  <Step title="Enable two-factor authentication on your Google account">
+    App Passwords are only available when 2FA is active. Go to [myaccount.google.com](https://myaccount.google.com), open **Security**, and enable **2-Step Verification** if it is not already on.
+  </Step>
+  <Step title="Generate an App Password">
+    In your Google account under **Security**, locate **App Passwords**. Create a new password for "Mail" on "Other device" (name it something like `UniMaps`). Google will display a 16-character password — copy it immediately, as it will not be shown again.
+  </Step>
+  <Step title="Set the environment variables">
+    Add the following to your `.env` (or your deployment platform's environment variable UI):
+
+    ```dotenv
+    MAIL_MAILER=smtp
+    MAIL_HOST=smtp.gmail.com
+    MAIL_PORT=587
+    MAIL_USERNAME=your-address@gmail.com
+    MAIL_PASSWORD=abcdefghijklmnop
+    MAIL_ENCRYPTION=tls
+    MAIL_FROM_ADDRESS=your-address@gmail.com
+    MAIL_FROM_NAME="ITFIP Maps"
+    ```
+
+    Replace `your-address@gmail.com` with your actual Gmail address and `abcdefghijklmnop` with the 16-character App Password (no spaces).
+  </Step>
+  <Step title="Clear the config cache">
+    After saving the `.env` changes, clear Laravel's cached configuration so the new values are picked up:
+
+    ```bash
+    php artisan config:clear
+    php artisan cache:clear
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+Do not use your regular Gmail password for `MAIL_PASSWORD`. Google blocks SMTP authentication with account passwords. You must use an App Password generated in the step above. If you see an "Authentication failed" error, verify that 2FA is active on the account and that the App Password has exactly 16 characters with no spaces.
+</Warning>
+
+### Gmail SMTP variables reference
+
+| Variable | Value |
+|---|---|
+| `MAIL_MAILER` | `smtp` |
+| `MAIL_HOST` | `smtp.gmail.com` |
+| `MAIL_PORT` | `587` |
+| `MAIL_ENCRYPTION` | `tls` |
+| `MAIL_USERNAME` | Your Gmail address |
+| `MAIL_PASSWORD` | 16-character App Password |
+| `MAIL_FROM_ADDRESS` | Your Gmail address (or a verified sender) |
+| `MAIL_FROM_NAME` | Display name shown to recipients |
+
+## Brevo (Sendinblue) API setup
+
+The `EmailService` class (`Clase1/app/Services/EmailService.php`) can send email through the Brevo transactional email API instead of an SMTP relay. When using this path, no `MAIL_*` variables are required — only the Brevo API key.
+
+<Steps>
+  <Step title="Create a Brevo account">
+    Sign up at [brevo.com](https://www.brevo.com) and verify your sender domain or email address in the Brevo dashboard.
+  </Step>
+  <Step title="Generate an API key">
+    In the Brevo dashboard, go to **SMTP & API** → **API Keys** and create a new key with transactional email permissions.
+  </Step>
+  <Step title="Set the environment variable">
+    ```dotenv
+    BREVO_API_KEY=xkeysib-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-xxxxxxxxxxxxxxxx
+    ```
+  </Step>
+</Steps>
+
+<Note>
+When using Brevo, the sender address is set directly in `EmailService.php`. If you need to change the sender name or address, update that file. The `MAIL_FROM_ADDRESS` and `MAIL_FROM_NAME` variables are not read by the Brevo code path.
+</Note>
+
+## Testing email in development
+
+<Tip>
+Use [Mailtrap](https://mailtrap.io) to capture outgoing emails during development without sending real messages. Create a free inbox and use the SMTP credentials Mailtrap provides:
+
+```dotenv
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.mailtrap.io
+MAIL_PORT=2525
+MAIL_USERNAME=your_mailtrap_username
+MAIL_PASSWORD=your_mailtrap_password
+MAIL_ENCRYPTION=null
+```
+
+All emails sent by the application will appear in your Mailtrap inbox instead of being delivered to real addresses.
+</Tip>
+
+You can also verify SMTP connectivity directly from the Laravel REPL:
+
+```bash
+php artisan tinker
+```
+
+```php
+Mail::raw('Test message from UniMaps', function ($message) {
+    $message->to('you@example.com')->subject('UniMaps SMTP test');
+});
+```
+
+If `null` is returned with no exception, the message was accepted by the SMTP server. Check your inbox (and the spam folder) to confirm delivery. If you see an error, check `storage/logs/laravel.log` for the full error message.

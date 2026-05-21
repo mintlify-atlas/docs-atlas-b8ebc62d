@@ -1,0 +1,120 @@
+---
+title: 'Your UniMaps Dashboard: Stats and Quick Access'
+description: 'The UniMaps dashboard gives you a personalized home screen with usage stats, location search, favorites, recent navigation history, and quick action buttons.'
+---
+
+After logging in, you land on the dashboard — your personalized starting point for everything in UniMaps. It greets you by name, shows how you have been using the app, and puts the most common actions one tap away. From here you can search for any campus location, manage your favorites, review your navigation history, and jump straight to the interactive map.
+
+## User info and welcome banner
+
+The top of the dashboard displays a full-width welcome banner with your first name loaded from your account profile (`GET /api/auth/user`). The greeting text changes based on the time of day:
+
+- Before 12:00 — "Buenos días. ¿A dónde vamos hoy?"
+- 12:00–17:59 — "Buenas tardes."
+- 18:00 onwards — "Buenas noches."
+
+An **Ir al Mapa** button sits to the right of the greeting, giving you a one-tap path to the campus map at any time.
+
+## Stats cards
+
+Below the welcome banner, four animated stat cards give you a snapshot of your activity:
+
+<CardGroup cols={2}>
+  <Card title="Búsquedas" icon="search">
+    The total number of campus location searches you have performed.
+  </Card>
+  <Card title="Favoritos" icon="star">
+    How many locations you have saved as favorites.
+  </Card>
+  <Card title="Visitados" icon="map-pin">
+    The number of distinct nodes you have navigated to.
+  </Card>
+  <Card title="Salones" icon="building">
+    The total number of rooms and spaces available in the campus map.
+  </Card>
+</CardGroup>
+
+Each value counts up from zero on page load using a 1-second animation.
+
+## Search bar
+
+The search card lets you find any campus location without opening the map first. As you type, results filter in real time against the list of known nodes (classrooms, labs, the library, the cafeteria, the gym, and more). Each result shows the location name and its type.
+
+<Steps>
+  <Step title="Type in the search field">
+    Enter any part of a location name — for example "Sal" to find salones, or "Café" for the cafeteria.
+  </Step>
+  <Step title="Select a result">
+    Tap a result. The location is saved to your recent searches, your search count increases by one, and the app navigates you to `/map` with `selectedDestino` set in `localStorage` so the map opens with the destination pre-selected.
+  </Step>
+</Steps>
+
+<Info>
+The search on the dashboard is independent from the map's search. The dashboard search lets you pick a location and then redirects you; the map search filters only the currently mapped zones (Entrada Universidad, Bloque D, Cafetería).
+</Info>
+
+## Recent navigation history
+
+The **Recientes** card shows up to five of your most recently visited locations, displayed as a timeline with relative timestamps ("5m", "2h", "1d"). Tap any entry to navigate directly to that location on the map.
+
+You can clear your entire history with the "Limpiar Historial" button. The history is stored locally in `localStorage` under the `recentSearches` key and is not synchronized to the server.
+
+## Favorites management
+
+The **Favoritos** card lists every location you have starred. Each favorite shows its name, type badge, and a heart button to remove it. Tap the name to go to that location on the map.
+
+<Note>
+Favorites are currently stored in `localStorage`. They are not backed up to your account, so clearing your browser data will remove them.
+</Note>
+
+To add a new favorite, find and navigate to a location from the map view, where you can mark it directly.
+
+## Quick action buttons
+
+The **Acciones Rápidas** card provides four buttons:
+
+| Button | Action |
+|---|---|
+| Mapa | Opens the campus map at `/map` |
+| Perfil | Opens the profile modal to edit your name and email |
+| Config | Opens the settings modal |
+| Salir | Logs you out and redirects to `/login` |
+
+## Profile modal
+
+Clicking **Perfil** opens a dialog where you can update your display name and email address. Your avatar shows your initials. The form fields are:
+
+- **Nombres** — your first name(s)
+- **Apellidos** — your last name(s)
+- **Email** — your registered email address
+
+Changes are saved via `PUT /api/auth/update-profile`.
+
+## Settings modal
+
+The **Config** button opens a settings dialog with the following options:
+
+| Setting | Description |
+|---|---|
+| Modo Oscuro | Toggles dark mode (synced with the theme toggle in the header) |
+| Notificaciones | Enables or disables in-app notifications |
+| Autenticación en dos pasos | Sends a one-time code to your email on each login when enabled |
+
+The two-factor authentication toggle calls `POST /api/auth/enable-2fa` or `DELETE /api/auth/disable-2fa` and shows a confirmation message once the change is saved.
+
+A **Zona de Peligro** section at the bottom lets you permanently delete your account after a confirmation prompt.
+
+## Dark mode toggle
+
+The sun/moon toggle in the header switches the entire dashboard between light and dark themes. The theme is managed by the `useTheme` composable and persists across page reloads.
+
+<CardGroup cols={2}>
+  <Card title="Light mode" icon="sun">
+    White cards with a light blue-grey background. Best for use in bright environments.
+  </Card>
+  <Card title="Dark mode" icon="moon">
+    Dark navy cards with a deep gradient background. Easier on the eyes at night or in dim light.
+  </Card>
+</CardGroup>
+
+The same toggle appears on the campus map view, and both share the same theme state — switching on one screen switches both.

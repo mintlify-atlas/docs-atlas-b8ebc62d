@@ -1,0 +1,96 @@
+---
+title: "Two-Factor Authentication with UniMaps"
+description: "Enable or disable email-based 2FA in UniMaps. A 12-character code is emailed at login and expires in 3 minutes. Covers the full 2FA login flow."
+---
+
+Two-factor authentication (2FA) adds a second verification step to your UniMaps login. After you enter your email and password, UniMaps emails you a short alphanumeric code that you must enter before access is granted. Even if someone obtains your password, they cannot log in without also having access to your email inbox.
+
+## How 2FA works in UniMaps
+
+UniMaps uses **email-based 2FA**. When you log in with 2FA enabled:
+
+1. You enter your email and password as usual.
+2. The server recognises that 2FA is active on your account and sends a **12-character alphanumeric code** to your registered email address.
+3. A code-entry screen appears in the login form.
+4. You enter the code to complete authentication.
+5. A Sanctum Bearer token is issued and your session begins.
+
+The code is formatted in three groups of four characters separated by hyphens (for example `1Mau-80mQ-hqL2`) to make it easier to read and type.
+
+<Warning>
+Each 2FA code is valid for **3 minutes only**. If you don't submit the code within that window, it expires and you will need to start the login process again.
+</Warning>
+
+## Enabling 2FA
+
+2FA is off by default. To enable it, send an authenticated request to:
+
+```http
+POST /api/auth/two-factor/enable
+Authorization: Bearer <your_token>
+```
+
+No request body is required. A successful response confirms that 2FA is now active on your account. From your next login onwards, a code will be sent to your email before a session token is issued.
+
+## Disabling 2FA
+
+To turn off 2FA, send:
+
+```http
+POST /api/auth/two-factor/disable
+Authorization: Bearer <your_token>
+```
+
+After disabling, logging in with your email and password alone is sufficient to obtain a token.
+
+## Login flow when 2FA is active
+
+<Steps>
+  <Step title="Enter your email and password">
+    Submit your credentials on the login screen. UniMaps validates them and detects that 2FA is enabled.
+  </Step>
+  <Step title="Check your inbox">
+    A 12-character code is sent to your registered email address. Open your inbox (or spam folder) and locate the message from UniMaps.
+  </Step>
+  <Step title="Enter the code">
+    Type the code into the verification field on the login screen. The code is formatted as `XXXX-XXXX-XXXX` to help you transcribe it accurately.
+  </Step>
+  <Step title="Submit the code">
+    Click **Autenticar código**. The server validates the code against your account.
+  </Step>
+  <Step title="Session started">
+    If the code is correct and has not expired, UniMaps issues a Bearer token and redirects you to the campus map.
+  </Step>
+</Steps>
+
+## Verifying a 2FA code via the API
+
+If you are integrating with the UniMaps API directly, verify the code with:
+
+```http
+POST /api/auth/two-factor/verify
+Content-Type: application/json
+
+{
+  "email": "tu@correo.com",
+  "code": "1Mau-80mQ-hqL2"
+}
+```
+
+A successful `200` response includes the `token` field you need for subsequent authenticated requests:
+
+```json
+{
+  "token": "sanctum_bearer_token_here"
+}
+```
+
+An expired or incorrect code returns a `401` error. Restart the login flow to receive a fresh code.
+
+<Note>
+The `email` field in the verify request must match exactly the email used in the original login attempt that triggered the 2FA challenge.
+</Note>
+
+<Tip>
+If you don't see the 2FA email within a minute, check your **spam or junk folder**. Email providers sometimes filter automated messages. Adding the UniMaps sender address to your contacts helps ensure future codes land in your inbox.
+</Tip>

@@ -1,133 +1,55 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
-icon: 'star'
+title: "UniMaps: Campus Navigation for ITFIP"
+description: "UniMaps helps students and staff navigate the ITFIP campus with interactive maps, shortest-path routing, and secure user accounts."
 ---
 
-## Setting up
+UniMaps is a campus navigation web application built for the Instituto Técnico para el Fomento de la Industria y la Producción (ITFIP). It lets students and staff find classrooms, facilities, and routes across campus through an interactive map, real-time geolocation, and a secure account system.
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Create an account and navigate the campus map in minutes.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Campus Map" icon="map" href="/features/campus-map">
+    Explore the interactive Leaflet map with 51 campus waypoints.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Routing" icon="route" href="/features/routing">
+    Get optimal shortest-path directions between any two locations.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="API Reference" icon="code" href="/api/auth/login">
+    Integrate with the UniMaps REST API using Bearer token auth.
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## Get up and running
 
-Everything you need to create world-class documentation.
+<Steps>
+  <Step title="Create your account">
+    Visit the registration page, fill in your name, email, and a secure backup email address. You'll receive a verification link to activate your account.
+  </Step>
+  <Step title="Verify your email">
+    Click the link in your verification email. Once confirmed, your account is activated and your secure recovery key is generated automatically.
+  </Step>
+  <Step title="Log in and explore the dashboard">
+    Sign in to access your personalized dashboard with quick-access search, favorite locations, and recent navigation history.
+  </Step>
+  <Step title="Open the campus map">
+    Navigate to the map view to see the ITFIP campus. Search for a classroom or facility, tap any node, and get turn-by-turn directions.
+  </Step>
+</Steps>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+## Key features
 
-## Make your content agent ready
-
-Make your docs work for humans and AI agents alike.
-
-<Columns cols={2}>
-  <Card
-    title="Prompt component"
-    icon="robot"
-    href="/agent-ready/prompt"
-  >
-    Embed shareable AI prompts readers can copy or open in Cursor.
+<CardGroup cols={2}>
+  <Card title="Interactive map" icon="location-dot" href="/features/campus-map">
+    Leaflet-powered map with 51 pre-configured nodes covering buildings, classrooms, hallways, stairs, and the cafeteria.
   </Card>
-  <Card
-    title="Visibility"
-    icon="eye"
-    href="/agent-ready/visibility"
-  >
-    Show different content to humans and agents reading your docs.
+  <Card title="Shortest-path routing" icon="diagram-project" href="/features/routing">
+    Dijkstra's algorithm computes the optimal walking route between any two campus nodes.
   </Card>
-  <Card
-    title="Contextual menu"
-    icon="bolt"
-    href="/agent-ready/contextual"
-  >
-    Give readers one-click access to Claude, ChatGPT, Cursor, and more.
+  <Card title="Secure authentication" icon="shield-halved" href="/auth/overview">
+    Two-factor auth, brute-force protection, and a unique secure key recovery system.
   </Card>
-  <Card
-    title="AI coding tools"
-    icon="wand-magic-sparkles"
-    href="/ai-tools/claude-code"
-  >
-    Set up Claude Code, Cursor, or Windsurf with Mintlify's skill.
+  <Card title="Deploy anywhere" icon="cloud" href="/deployment">
+    One-command Railway deployment with documented environment variables and email configuration.
   </Card>
-</Columns>
-
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+</CardGroup>

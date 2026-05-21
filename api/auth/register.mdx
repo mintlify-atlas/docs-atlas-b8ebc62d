@@ -1,0 +1,294 @@
+---
+title: 'Registration and email verification endpoints'
+description: 'Create a new UniMaps account, confirm your email address, resend the verification email, and manage your secure key file for account recovery.'
+---
+
+These endpoints handle the full user onboarding flow: submitting registration data creates a pending account and dispatches a verification email. Clicking the link in that email activates the account and generates the user's secure key. The secure key is a `.jw` file tied to both the primary and backup email addresses; it can be used later as an alternative login credential.
+
+---
+
+## POST /api/auth/register
+
+Creates a pending user record and sends a verification email to the provided primary address. The account is not active until the email is confirmed via `/api/auth/verify-email`.
+
+<ParamField body="nombres" type="string" required>
+  First name(s). Letters and spaces only (including accented characters). Maximum 191 characters.
+</ParamField>
+
+<ParamField body="apellidos" type="string" required>
+  Last name(s). Letters and spaces only (including accented characters). Maximum 191 characters.
+</ParamField>
+
+<ParamField body="email" type="string" required>
+  Primary email address. Used for login and notifications. Maximum 191 characters.
+</ParamField>
+
+<ParamField body="secure_email" type="string" required>
+  Backup email address for secure key delivery. Must differ from `email`. Maximum 191 characters.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  Password for the account. Minimum 8 characters.
+</ParamField>
+
+<ParamField body="password_confirmation" type="string" required>
+  Must match `password`.
+</ParamField>
+
+### Responses
+
+<ResponseField name="message" type="string">
+  Confirmation that the account was created and the verification email was dispatched.
+</ResponseField>
+
+<ResponseField name="pending_id" type="integer">
+  Internal identifier for the pending registration record.
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  Echoes back the primary email address.
+</ResponseField>
+
+<CodeGroup>
+
+```bash Register
+curl -X POST https://your-api.up.railway.app/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nombres": "María",
+    "apellidos": "López",
+    "email": "maria@itfip.edu.co",
+    "secure_email": "maria.backup@gmail.com",
+    "password": "secret1234",
+    "password_confirmation": "secret1234"
+  }'
+```
+
+</CodeGroup>
+
+**201 — Account created (pending verification)**
+
+```json
+{
+  "message": "Usuario registrado. Verifica tu correo electrónico.",
+  "pending_id": 17,
+  "email": "maria@itfip.edu.co"
+}
+```
+
+**422 — Email already registered or pending**
+
+```json
+{ "message": "El correo ya está registrado" }
+```
+
+**422 — Validation errors**
+
+```json
+{
+  "message": "The nombres field is required.",
+  "errors": {
+    "nombres": ["El nombre es requerido"],
+    "secure_email": ["El correo seguro debe ser diferente al correo principal"]
+  }
+}
+```
+
+<Note>
+  The verification email is sent asynchronously after the HTTP response is returned, so the 201 does not guarantee delivery has occurred yet. If the email does not arrive within a few minutes, use `/api/auth/resend-verification`.
+</Note>
+
+---
+
+## POST /api/auth/verify-email
+
+Activates a pending account using the 64-character token from the verification email link. On success, the user is moved from the `pending_users` table to the `users` table and their secure key is generated.
+
+<ParamField body="token" type="string" required>
+  The 64-character alphanumeric verification token from the email link. Expires 24 hours after registration.
+</ParamField>
+
+### Responses
+
+<ResponseField name="message" type="string">
+  `"Email verificado exitosamente"` on success.
+</ResponseField>
+
+<ResponseField name="user" type="object">
+  The newly created user record.
+</ResponseField>
+
+<ResponseField name="secure_key_generated" type="boolean">
+  `true` when the secure key was generated during this verification. Present for accounts coming from `pending_users`.
+</ResponseField>
+
+<CodeGroup>
+
+```bash Verify email
+curl -X POST https://your-api.up.railway.app/api/auth/verify-email \
+  -H "Content-Type: application/json" \
+  -d '{"token": "a9b3c2d1e4f5...64chars"}'
+```
+
+</CodeGroup>
+
+**200 — Verified**
+
+```json
+{
+  "message": "Email verificado exitosamente",
+  "user": {
+    "id": 42,
+    "nombres": "María",
+    "apellidos": "López",
+    "email": "maria@itfip.edu.co"
+  },
+  "secure_key_generated": true
+}
+```
+
+**404 — Token not found**
+
+```json
+{ "message": "Token de verificación no encontrado" }
+```
+
+**422 — Token expired**
+
+```json
+{ "message": "Token de verificación expirado" }
+```
+
+---
+
+## POST /api/auth/resend-verification
+
+Generates a new verification token and resends the verification email. Use this when the original email was not received or the 24-hour token has expired.
+
+<ParamField body="email" type="string" required>
+  The primary email address of the unverified account.
+</ParamField>
+
+### Responses
+
+<ResponseField name="message" type="string">
+  `"Correo de verificación reenviado"` on success.
+</ResponseField>
+
+<CodeGroup>
+
+```bash Resend verification
+curl -X POST https://your-api.up.railway.app/api/auth/resend-verification \
+  -H "Content-Type: application/json" \
+  -d '{"email": "maria@itfip.edu.co"}'
+```
+
+</CodeGroup>
+
+**200 — Email sent**
+
+```json
+{ "message": "Correo de verificación reenviado" }
+```
+
+**404 — Account not found or already verified**
+
+```json
+{ "message": "Usuario no encontrado o ya verificado" }
+```
+
+**422 — Invalid email format**
+
+```json
+{
+  "message": "Email inválido",
+  "errors": { "email": ["El correo debe ser válido"] }
+}
+```
+
+---
+
+## POST /api/auth/send-secure-key-email
+
+Sends the `.jw` secure key file as an email attachment to the user's backup (`secure_email`) address. This is useful when a user needs the file but has not yet downloaded it, or needs it re-sent.
+
+<Warning>
+  This endpoint uses the backup address on record, not the primary email. Ensure the `secure_email` address is accessible before calling this endpoint.
+</Warning>
+
+<ParamField body="email" type="string" required>
+  The primary email address of the account whose key should be sent.
+</ParamField>
+
+### Responses
+
+<ResponseField name="message" type="string">
+  `"Archivo enviado al correo seguro"` on success.
+</ResponseField>
+
+<CodeGroup>
+
+```bash Send secure key by email
+curl -X POST https://your-api.up.railway.app/api/auth/send-secure-key-email \
+  -H "Content-Type: application/json" \
+  -d '{"email": "maria@itfip.edu.co"}'
+```
+
+</CodeGroup>
+
+**200 — Key sent to backup address**
+
+```json
+{ "message": "Archivo enviado al correo seguro" }
+```
+
+**404 — User not found**
+
+```json
+{ "message": "Usuario no encontrado" }
+```
+
+---
+
+## GET /api/auth/secure-key-download
+
+Downloads the `.jw` secure key file for the authenticated user. The response is a binary file attachment, not JSON. Requires a valid bearer token.
+
+**Headers**
+
+| Header | Value |
+|---|---|
+| `Authorization` | `Bearer {token}` |
+
+### Response
+
+The server returns the file with the following headers:
+
+| Header | Value |
+|---|---|
+| `Content-Type` | `application/octet-stream` |
+| `Content-Disposition` | `attachment; filename="<key-file>.jw"` |
+
+<CodeGroup>
+
+```bash Download secure key
+curl -X GET https://your-api.up.railway.app/api/auth/secure-key-download \
+  -H "Authorization: Bearer 1|abc123..." \
+  --output recovery.jw
+```
+
+</CodeGroup>
+
+**200 — Binary file download**
+
+The response body is the raw `.jw` file content. Save it securely; it can be used to log in via `POST /api/auth/login-with-key` if you lose your password.
+
+**401 — Unauthenticated**
+
+```json
+{ "message": "Unauthenticated." }
+```
+
+<Tip>
+  Store the downloaded `.jw` file in a secure location such as a password manager or encrypted drive. It is tied to your primary email and backup email address pair, so it cannot be reused after changing either address.
+</Tip>

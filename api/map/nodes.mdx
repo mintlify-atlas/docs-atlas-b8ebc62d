@@ -1,0 +1,319 @@
+---
+title: "Campus nodes API: list, search, and nearest node"
+description: "Query, search, and locate campus waypoints. Retrieve all 51 geo-tagged nodes, run name searches, and find the nearest node to any GPS coordinate."
+---
+
+Nodes are the waypoints that make up the UniMaps campus graph. Every node carries a geographic coordinate pair (latitude and longitude), a floor number, and a type that describes what the location represents — a corridor, a classroom, a restroom, or a stairwell. Clients use the node list to render the campus map, the search endpoint to let users find a destination by name, and the nearest-node endpoint to snap a GPS position to the graph before routing.
+
+## Node object
+
+<ResponseField name="id" type="integer">
+  Unique identifier for the node. Used as `origen` / `destino` in routing requests.
+</ResponseField>
+
+<ResponseField name="nombre" type="string">
+  Human-readable name of the location, e.g. `"Cafeteria"` or `"Entrada Universidad"`.
+</ResponseField>
+
+<ResponseField name="latitud" type="number">
+  Decimal latitude (WGS 84). Ranges from `-90` to `90`.
+</ResponseField>
+
+<ResponseField name="longitud" type="number">
+  Decimal longitude (WGS 84). Ranges from `-180` to `180`.
+</ResponseField>
+
+<ResponseField name="tipo_id" type="integer">
+  Foreign key referencing `nodo_tipos`. Use `GET /api/nodo-tipos` to resolve to a name.
+  Common values: `1` = `salon`, `2` = `pasillo`, `3` = `baño`, `4` = `escaleras`.
+</ResponseField>
+
+<ResponseField name="piso" type="integer">
+  Floor level. `1` = ground floor. Increments upward.
+</ResponseField>
+
+---
+
+## List all nodes
+
+Returns the complete in-memory set of campus nodes. The current graph contains **51 nodes** spanning the main campus path from the university entrance to the cafeteria.
+
+```
+GET /api/nodos
+```
+
+No parameters or authentication required.
+
+<CodeGroup>
+
+```bash curl
+curl -s https://your-api.example.com/api/nodos
+```
+
+```javascript fetch
+const res = await fetch("https://your-api.example.com/api/nodos");
+const nodes = await res.json();
+```
+
+</CodeGroup>
+
+**Example response**
+
+```json
+[
+  {
+    "id": 1,
+    "nombre": "Entrada Universidad",
+    "latitud": 4.1540264,
+    "longitud": -74.8956435,
+    "tipo_id": 2,
+    "piso": 1
+  },
+  {
+    "id": 17,
+    "nombre": "Punto Central",
+    "latitud": 4.155233,
+    "longitud": -74.8965643,
+    "tipo_id": 2,
+    "piso": 1
+  },
+  {
+    "id": 49,
+    "nombre": "Cafeteria",
+    "latitud": 4.1569299,
+    "longitud": -74.8976371,
+    "tipo_id": 2,
+    "piso": 1
+  },
+  {
+    "id": 51,
+    "nombre": "Escalera Cafetería",
+    "latitud": 4.1569111,
+    "longitud": -74.8976424,
+    "tipo_id": 4,
+    "piso": 1
+  }
+]
+```
+
+<Note>
+  The full response includes all 51 nodes. The snippet above shows representative entries only.
+</Note>
+
+---
+
+## Search nodes by name
+
+Performs a case-insensitive substring search over node names. Useful for autocomplete and destination pickers in the frontend.
+
+```
+GET /api/nodos/buscar?q={query}
+```
+
+<ParamField query="q" type="string" required>
+  Search query. Must be at least 2 characters. Matched against `nombre` using case-insensitive substring comparison.
+</ParamField>
+
+<CodeGroup>
+
+```bash curl
+curl -s "https://your-api.example.com/api/nodos/buscar?q=cafeteria"
+```
+
+```javascript fetch
+const res = await fetch("https://your-api.example.com/api/nodos/buscar?q=cafeteria");
+const data = await res.json();
+```
+
+</CodeGroup>
+
+**Example response — 200 OK**
+
+```json
+{
+  "query": "cafeteria",
+  "total": 2,
+  "resultados": [
+    {
+      "id": 49,
+      "nombre": "Cafeteria",
+      "latitud": 4.1569299,
+      "longitud": -74.8976371,
+      "tipo_id": 2,
+      "piso": 1
+    },
+    {
+      "id": 50,
+      "nombre": "Paso Cafetería",
+      "latitud": 4.1569081,
+      "longitud": -74.8975829,
+      "tipo_id": 2,
+      "piso": 1
+    }
+  ]
+}
+```
+
+**Error response — 400 Bad Request** (query shorter than 2 characters)
+
+```json
+{
+  "error": "La búsqueda debe tener al menos 2 caracteres"
+}
+```
+
+---
+
+## Find nearest node
+
+Accepts a GPS coordinate and returns the campus node closest to that position. Distance is computed with the **Haversine formula** (Earth radius = 6 371 000 m). Use this endpoint to snap a user's live location to the graph before calling the routing endpoint.
+
+```
+POST /api/nodos/mas-cercano
+```
+
+<ParamField body="latitud" type="number" required>
+  Decimal latitude of the user's current position. Must be between `-90` and `90`.
+</ParamField>
+
+<ParamField body="longitud" type="number" required>
+  Decimal longitude of the user's current position. Must be between `-180` and `180`.
+</ParamField>
+
+<CodeGroup>
+
+```bash curl
+curl -s -X POST https://your-api.example.com/api/nodos/mas-cercano \
+  -H "Content-Type: application/json" \
+  -d '{"latitud": 4.1543, "longitud": -74.8959}'
+```
+
+```javascript fetch
+const res = await fetch("https://your-api.example.com/api/nodos/mas-cercano", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ latitud: 4.1543, longitud: -74.8959 }),
+});
+const data = await res.json();
+```
+
+</CodeGroup>
+
+**Example response — 200 OK**
+
+```json
+{
+  "ubicacion_actual": {
+    "latitud": 4.1543,
+    "longitud": -74.8959
+  },
+  "nodo_mas_cercano": {
+    "id": 5,
+    "nombre": "Paso 5",
+    "latitud": 4.1543186,
+    "longitud": -74.8958941,
+    "tipo_id": 2,
+    "piso": 1,
+    "distancia": 2.17
+  }
+}
+```
+
+<ResponseField name="ubicacion_actual" type="object">
+  Echo of the coordinates sent in the request body.
+</ResponseField>
+
+<ResponseField name="nodo_mas_cercano" type="object">
+  The node object of the closest campus waypoint, augmented with a `distancia` field (meters, rounded to 2 decimal places).
+</ResponseField>
+
+---
+
+## Create a node
+
+Persists a new node to the `nodos` database table. The in-memory static graph used by routing is not affected; restart or re-seed to include new nodes in route calculations.
+
+```
+POST /api/nodos
+```
+
+<ParamField body="nombre" type="string" required>
+  Display name of the new node. Maximum 255 characters.
+</ParamField>
+
+<ParamField body="latitud" type="number" required>
+  Decimal latitude. Must be between `-90` and `90`.
+</ParamField>
+
+<ParamField body="longitud" type="number" required>
+  Decimal longitude. Must be between `-180` and `180`.
+</ParamField>
+
+<ParamField body="tipo_id" type="integer" required>
+  ID of a valid `nodo_tipos` record. Use `GET /api/nodo-tipos` to enumerate valid values.
+</ParamField>
+
+<ParamField body="piso" type="integer" required>
+  Floor level (`1` = ground floor).
+</ParamField>
+
+<CodeGroup>
+
+```bash curl
+curl -s -X POST https://your-api.example.com/api/nodos \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nombre": "Sala de Reuniones",
+    "latitud": 4.15510,
+    "longitud": -74.89640,
+    "tipo_id": 1,
+    "piso": 2
+  }'
+```
+
+```javascript fetch
+const res = await fetch("https://your-api.example.com/api/nodos", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    nombre: "Sala de Reuniones",
+    latitud: 4.1551,
+    longitud: -74.8964,
+    tipo_id: 1,
+    piso: 2,
+  }),
+});
+const node = await res.json();
+```
+
+</CodeGroup>
+
+**Example response — 201 Created**
+
+```json
+{
+  "id": 52,
+  "nombre": "Sala de Reuniones",
+  "latitud": 4.1551,
+  "longitud": -74.8964,
+  "tipo_id": 1,
+  "piso": 2,
+  "created_at": "2026-05-21T14:00:00.000000Z",
+  "updated_at": "2026-05-21T14:00:00.000000Z"
+}
+```
+
+---
+
+## Node type reference
+
+| `tipo_id` | Name        | Description                          |
+|-----------|-------------|--------------------------------------|
+| 1         | `salon`     | Classroom or lecture hall            |
+| 2         | `pasillo`   | Corridor or outdoor walkway          |
+| 3         | `baño`      | Restroom                             |
+| 4         | `escaleras` | Staircase connecting multiple floors |
+
+<Tip>
+  Fetch the live catalog with `GET /api/nodo-tipos`. Only records with `activo: true` are returned.
+</Tip>

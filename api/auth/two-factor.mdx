@@ -1,0 +1,196 @@
+---
+title: 'Two-factor authentication API endpoints'
+description: 'Enable or disable 2FA on a UniMaps account and verify the time-limited 12-character alphanumeric code sent during a 2FA login challenge.'
+---
+
+UniMaps supports email-based two-factor authentication. When 2FA is enabled on an account, a successful password-based login does not return a bearer token immediately. Instead, a 12-character alphanumeric code (formatted as `XXXX-XXXX-XXXX`) is sent to the user's registered email. The user must submit that code to `/api/auth/two-factor/verify` within 3 minutes to receive their token.
+
+---
+
+## POST /api/auth/two-factor/enable
+
+Activates two-factor authentication for the authenticated user. The account's email address must already be verified before 2FA can be enabled. Requires a valid bearer token.
+
+**Headers**
+
+| Header | Value |
+|---|---|
+| `Authorization` | `Bearer {token}` |
+
+### Responses
+
+<ResponseField name="message" type="string">
+  Human-readable result message.
+</ResponseField>
+
+<ResponseField name="two_factor_enabled" type="boolean">
+  Always `true` when the request succeeds.
+</ResponseField>
+
+<CodeGroup>
+
+```bash Enable 2FA
+curl -X POST https://your-api.up.railway.app/api/auth/two-factor/enable \
+  -H "Authorization: Bearer 1|abc123..."
+```
+
+</CodeGroup>
+
+**200 — 2FA enabled**
+
+```json
+{
+  "message": "Autenticación en dos pasos activada correctamente.",
+  "two_factor_enabled": true
+}
+```
+
+**401 — Unauthenticated**
+
+```json
+{ "message": "Unauthenticated." }
+```
+
+**403 — Email not yet verified**
+
+```json
+{
+  "message": "Debes verificar tu correo electrónico antes de activar la autenticación en dos pasos."
+}
+```
+
+<Note>
+  Enabling 2FA does not affect the current session. Existing tokens remain valid. The 2FA challenge only applies to new logins made after enabling.
+</Note>
+
+---
+
+## POST /api/auth/two-factor/disable
+
+Deactivates two-factor authentication for the authenticated user. Any pending 2FA code stored on the account is cleared. Requires a valid bearer token.
+
+**Headers**
+
+| Header | Value |
+|---|---|
+| `Authorization` | `Bearer {token}` |
+
+### Responses
+
+<ResponseField name="message" type="string">
+  Human-readable result message.
+</ResponseField>
+
+<ResponseField name="two_factor_enabled" type="boolean">
+  Always `false` when the request succeeds.
+</ResponseField>
+
+<CodeGroup>
+
+```bash Disable 2FA
+curl -X POST https://your-api.up.railway.app/api/auth/two-factor/disable \
+  -H "Authorization: Bearer 1|abc123..."
+```
+
+</CodeGroup>
+
+**200 — 2FA disabled**
+
+```json
+{
+  "message": "Autenticación en dos pasos desactivada correctamente.",
+  "two_factor_enabled": false
+}
+```
+
+**401 — Unauthenticated**
+
+```json
+{ "message": "Unauthenticated." }
+```
+
+---
+
+## POST /api/auth/two-factor/verify
+
+Completes a 2FA login challenge. Call this endpoint after a login attempt that returned `"two_factor_required": true`. Submit the code that was emailed to the user and receive a bearer token on success.
+
+This endpoint does **not** require an `Authorization` header — no token exists until verification succeeds.
+
+<ParamField body="email" type="string" required>
+  The email address used in the original login attempt.
+</ParamField>
+
+<ParamField body="code" type="string" required>
+  The 12-character alphanumeric code sent to the user's email, in `XXXX-XXXX-XXXX` format. The code expires 3 minutes after being issued.
+</ParamField>
+
+### Responses
+
+<ResponseField name="message" type="string">
+  `"Verificación exitosa. Has iniciado sesión."` on success.
+</ResponseField>
+
+<ResponseField name="token" type="string">
+  Sanctum bearer token for the authenticated session.
+</ResponseField>
+
+<ResponseField name="user" type="object">
+  Basic user data: `id`, `name`, `email`, `status`.
+</ResponseField>
+
+<CodeGroup>
+
+```bash Verify 2FA code
+curl -X POST https://your-api.up.railway.app/api/auth/two-factor/verify \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "student@itfip.edu.co",
+    "code": "aB3x-Tz9M-Qr4K"
+  }'
+```
+
+</CodeGroup>
+
+**200 — Verified, token issued**
+
+```json
+{
+  "message": "Verificación exitosa. Has iniciado sesión.",
+  "token": "3|def456...",
+  "user": {
+    "id": 42,
+    "name": "María López",
+    "email": "student@itfip.edu.co",
+    "status": "activo"
+  }
+}
+```
+
+**401 — User not found or code does not match**
+
+```json
+{ "message": "Código inválido." }
+```
+
+**403 — Code expired or 2FA not enabled**
+
+```json
+{
+  "message": "El código ha expirado. Solicita un nuevo ingreso para recibir otro código."
+}
+```
+
+**403 — Email not verified**
+
+```json
+{ "message": "Debes verificar tu correo electrónico primero." }
+```
+
+<Warning>
+  The 2FA code is valid for exactly 3 minutes. If the code expires, the user must initiate a new login via `POST /api/auth/login` to receive a fresh code. There is no endpoint to extend or re-send a code without starting a new login attempt.
+</Warning>
+
+<Note>
+  The code format is `XXXX-XXXX-XXXX` — 12 alphanumeric characters split into three groups of four by hyphens. The server hashes the provided value with SHA-256 before comparing it against the stored hash, so the raw code is never persisted.
+</Note>

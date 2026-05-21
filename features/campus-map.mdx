@@ -1,0 +1,121 @@
+---
+title: 'Explore the ITFIP Campus with the Interactive Map'
+description: 'Navigate the ITFIP campus in real time with a Leaflet-powered map featuring GPS tracking, compass orientation, route simulation, and fuzzy search.'
+---
+
+The campus map is the core of UniMaps. It renders a live, interactive view of the ITFIP university grounds, places you on the map using your device's GPS, and lets you navigate to any mapped location with a tap. The map is built on [Leaflet](https://leafletjs.com/) 1.9.4 and loads CartoDB tile layers that switch between a light and dark style depending on your theme preference.
+
+## How the map is centered
+
+When the map first loads, it centers on the ITFIP campus at coordinates **4.1563° N, -74.8975° W** and sets an initial zoom level of 18. If your browser has already granted location permission, the blue user marker is placed at your real GPS position instead of the campus center.
+
+<Note>
+The map requires you to be physically inside the ITFIP campus boundary (within ~500 m of the center point) to display the navigation interface. If you open the map from a different location, you will see an "out of campus" screen with your current coordinates.
+</Note>
+
+## Node types
+
+The campus graph contains **51 nodes** spread across the grounds. Each node has one of the following types:
+
+<CardGroup cols={2}>
+  <Card title="Salon" icon="book">
+    Classrooms and lecture rooms, such as Salón 101 or the rooms in Bloque D.
+  </Card>
+  <Card title="Pasillo" icon="arrow-right">
+    Hallways and corridors that connect buildings and open areas.
+  </Card>
+  <Card title="Baño" icon="droplets">
+    Bathrooms and restrooms located throughout the campus.
+  </Card>
+  <Card title="Escaleras" icon="stairs">
+    Stairways, including the Escalera Cafetería node near the cafeteria block.
+  </Card>
+  <Card title="Cafetería" icon="coffee">
+    The campus cafeteria area, accessible via the Entrada Cafetería node.
+  </Card>
+  <Card title="Pasillo (hallway junction)" icon="map-pin">
+    Generic waypoints and path junctions used to build the routing graph.
+  </Card>
+</CardGroup>
+
+## Geolocation tracking
+
+UniMaps uses the browser **Geolocation API** (`navigator.geolocation.watchPosition`) to continuously track your position while you have the map open. Location requests are made with `enableHighAccuracy: true` and `maximumAge: 0` so the app always requests a fresh GPS fix rather than relying on a cached position.
+
+Raw GPS readings are smoothed with a **2D Kalman filter** before being applied to the map marker. Readings with an accuracy worse than 100 m are discarded automatically. The marker animates smoothly between position updates rather than jumping.
+
+<Tip>
+For the most accurate tracking, open UniMaps outdoors in an area with a clear view of the sky. Indoor GPS accuracy varies by device.
+</Tip>
+
+## Compass and device orientation
+
+You can activate the compass by tapping the compass button on the left side of the map. UniMaps listens to `deviceorientationabsolute` (preferred) and `deviceorientation` events via the **DeviceOrientationEvent** API:
+
+- On **iOS 13+**, the app requests explicit permission before reading orientation data.
+- On **Android**, the app reads the absolute heading directly from `event.alpha` if `event.absolute === true`.
+- The heading value is smoothed with a Kalman filter and a 10-reading rolling buffer before being applied to the user marker's direction cone.
+
+When the compass is active, the blue user marker rotates to show the direction your device is facing. The current heading in degrees is shown next to the compass button.
+
+<Steps>
+  <Step title="Tap the compass button">
+    The circular compass icon on the left sidebar opens a permission prompt on iOS. On Android, orientation data starts immediately.
+  </Step>
+  <Step title="Point your device">
+    Hold your device level and rotate it. The blue arrow on your marker rotates to match your physical heading.
+  </Step>
+  <Step title="Deactivate when done">
+    Tap the compass button again to stop listening to orientation events and conserve battery.
+  </Step>
+</Steps>
+
+## Route simulation
+
+After you calculate a route, the **Iniciar Recorrido** button starts an animated simulation that moves your marker along the path at a walking speed of **1.4 m/s**. The animation runs via `requestAnimationFrame` and updates a progress bar in the HUD panel.
+
+- The portion of the route you have already "walked" is drawn in red so you can see your progress.
+- The map pans to follow your simulated position.
+- When the marker reaches the destination, a popup confirms arrival.
+- You can stop the simulation at any time by tapping **Detener**.
+
+## Search
+
+The destination search box accepts plain text and matches against node names using Unicode-normalized, accent-insensitive comparison. Only nodes that belong to a mapped preset zone (Entrada Universidad, Bloque D, Cafetería) appear as selectable results.
+
+Searches are stored in `localStorage` as `selectedDestino` and are carried across from the Dashboard search bar — if you select a location on the Dashboard, the map opens with that destination pre-filled.
+
+<Info>
+The search field currently surfaces only nodes in fully mapped zones. Unmapped areas of campus return the message "Aún no se ha mapeado esta zona."
+</Info>
+
+## Favorites and recent searches
+
+Locations you visit are automatically added to a recent searches list stored in `localStorage`. From the Dashboard you can mark any location as a favorite, also persisted locally.
+
+| Storage key | Contents |
+|---|---|
+| `selectedDestino` | Name of the destination last selected |
+| `recentSearches` | Array of recently visited nodes with timestamps |
+| `favorites` | Array of nodes marked as favorites |
+
+## Dark and light mode
+
+The map tile layer switches automatically when you toggle the theme:
+
+- **Light mode** — CartoDB `light_all` tiles with a bright, high-contrast style.
+- **Dark mode** — CartoDB `dark_all` tiles with a dark background optimized for low-light use.
+
+The toggle button is in the top-left corner of the map, and the `useTheme` composable persists your choice across sessions.
+
+## PWA install prompt
+
+UniMaps is a Progressive Web App. When you visit the map on a supported mobile browser for the first time, the browser may display an "Add to Home Screen" prompt. Installing it gives you:
+
+- Offline access to previously loaded tiles.
+- A full-screen experience without the browser chrome.
+- Faster startup from your device's home screen.
+
+<Warning>
+GPS and compass features require an active internet connection to load map tiles, even if the PWA is installed.
+</Warning>

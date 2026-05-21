@@ -1,0 +1,219 @@
+---
+title: "Shortest path routing between campus locations"
+description: "Compute the optimal walking route between any two campus nodes using Dijkstra's algorithm over the static 51-node, 50-edge campus graph."
+---
+
+The routing API calculates the shortest walking path between two campus waypoints. Internally, `NodoController::ruta` builds an adjacency list from the 50 in-memory directed edges and runs Dijkstra's algorithm to return the ordered sequence of nodes from origin to destination along with the total walking distance in meters. Node IDs used in route requests come from `GET /api/nodos`.
+
+<Note>
+  The campus graph is a static, directed chain of 51 nodes and 50 edges loaded in-memory on every request. No database reads are performed during routing, which keeps latency low but means dynamically created nodes (via `POST /api/nodos`) are not reflected in route calculations until the graph is updated in source code.
+</Note>
+
+---
+
+## Get shortest path
+
+Returns the ordered list of nodes forming the shortest path between two campus waypoints and the total distance in meters.
+
+```
+GET /api/nodos/ruta/{origen}/{destino}
+```
+
+<ParamField path="origen" type="integer" required>
+  ID of the starting node. Must exist in the static node set (`1`–`51`).
+</ParamField>
+
+<ParamField path="destino" type="integer" required>
+  ID of the destination node. Must exist in the static node set (`1`–`51`). Must differ from `origen`.
+</ParamField>
+
+<CodeGroup>
+
+```bash curl
+# Route from Entrada Universidad (1) to Cafeteria (49)
+curl -s https://your-api.example.com/api/nodos/ruta/1/49
+```
+
+```javascript fetch
+const res = await fetch("https://your-api.example.com/api/nodos/ruta/1/49");
+const route = await res.json();
+```
+
+</CodeGroup>
+
+**Example response — 200 OK**
+
+```json
+{
+  "origen": {
+    "id": 1,
+    "nombre": "Entrada Universidad",
+    "latitud": 4.1540264,
+    "longitud": -74.8956435,
+    "tipo_id": 2,
+    "piso": 1
+  },
+  "destino": {
+    "id": 49,
+    "nombre": "Cafeteria",
+    "latitud": 4.1569299,
+    "longitud": -74.8976371,
+    "tipo_id": 2,
+    "piso": 1
+  },
+  "distancia_total": 473.52,
+  "pasos": 48,
+  "ruta": [
+    {
+      "id": 1,
+      "nombre": "Entrada Universidad",
+      "latitud": 4.1540264,
+      "longitud": -74.8956435,
+      "tipo_id": 2,
+      "piso": 1
+    },
+    {
+      "id": 2,
+      "nombre": "Paso 2",
+      "latitud": 4.1540938,
+      "longitud": -74.8957258,
+      "tipo_id": 2,
+      "piso": 1
+    },
+    {
+      "id": 3,
+      "nombre": "Paso 3",
+      "latitud": 4.1541906,
+      "longitud": -74.8957731,
+      "tipo_id": 2,
+      "piso": 1
+    },
+    "... (intermediate nodes omitted for brevity) ...",
+    {
+      "id": 49,
+      "nombre": "Cafeteria",
+      "latitud": 4.1569299,
+      "longitud": -74.8976371,
+      "tipo_id": 2,
+      "piso": 1
+    }
+  ]
+}
+```
+
+### Response fields
+
+<ResponseField name="origen" type="object">
+  Full node object of the origin waypoint.
+</ResponseField>
+
+<ResponseField name="destino" type="object">
+  Full node object of the destination waypoint.
+</ResponseField>
+
+<ResponseField name="distancia_total" type="number">
+  Cumulative walking distance along the computed path, in meters (rounded to 2 decimal places).
+</ResponseField>
+
+<ResponseField name="pasos" type="integer">
+  Number of edges (hops) traversed. Equal to `length(ruta) - 1`.
+</ResponseField>
+
+<ResponseField name="ruta" type="array">
+  Ordered array of node objects from `origen` to `destino`. Render these coordinates sequentially to draw the path on the map.
+</ResponseField>
+
+### Error responses
+
+**404 — Node not found**
+
+```json
+{
+  "error": "Nodo no encontrado"
+}
+```
+
+Returned when either `origen` or `destino` is not a valid node ID.
+
+**404 — No route available**
+
+```json
+{
+  "error": "No hay ruta disponible entre estos nodos"
+}
+```
+
+Returned when the graph has no directed path connecting the two nodes. Because the current graph is a sequential chain (1 → 2 → … → 51), this only occurs if the `origen` is numerically greater than `destino` (since edges are directed forward only).
+
+<Tip>
+  Always call `GET /api/nodos` first to obtain valid IDs. Node IDs in the static graph run from `1` to `51`.
+</Tip>
+
+---
+
+## Get node type catalog
+
+Returns all active node type definitions. Use the `id` values here as `tipo_id` when creating nodes or filtering the map by type.
+
+```
+GET /api/nodo-tipos
+```
+
+No parameters required. Returns only records where `activo = true`.
+
+<CodeGroup>
+
+```bash curl
+curl -s https://your-api.example.com/api/nodo-tipos
+```
+
+```javascript fetch
+const res = await fetch("https://your-api.example.com/api/nodo-tipos");
+const tipos = await res.json();
+```
+
+</CodeGroup>
+
+**Example response — 200 OK**
+
+```json
+[
+  { "id": 1, "nombre": "salon",     "descripcion": "Classroom or lecture hall",            "activo": true },
+  { "id": 2, "nombre": "pasillo",   "descripcion": "Corridor or outdoor walkway",          "activo": true },
+  { "id": 3, "nombre": "baño",      "descripcion": "Restroom",                             "activo": true },
+  { "id": 4, "nombre": "escaleras", "descripcion": "Staircase connecting multiple floors", "activo": true }
+]
+```
+
+<ResponseField name="id" type="integer">
+  Primary key. Use as `tipo_id` in node objects.
+</ResponseField>
+
+<ResponseField name="nombre" type="string">
+  Machine-readable type name: `salon`, `pasillo`, `baño`, or `escaleras`.
+</ResponseField>
+
+<ResponseField name="descripcion" type="string">
+  Human-readable description of the node type.
+</ResponseField>
+
+<ResponseField name="activo" type="boolean">
+  Whether this type is currently in use. Inactive types are filtered out of this response.
+</ResponseField>
+
+---
+
+## Graph structure
+
+The campus navigation graph used for routing has the following characteristics:
+
+| Property         | Value                                          |
+|------------------|------------------------------------------------|
+| Nodes            | 51                                             |
+| Edges            | 50 directed edges (sequential: n → n+1)        |
+| Edge weights     | Haversine distance in meters between each pair |
+| Algorithm        | Dijkstra (O(V²) adjacency-list implementation) |
+| Data storage     | In-memory PHP array (no database I/O)          |
+| Notable nodes    | `1` = Entrada Universidad, `17` = Punto Central, `44` = Bloque D, `49` = Cafeteria, `51` = Escalera Cafetería |
+
+Because edges are directed from lower to higher IDs, routing from a lower-numbered node to a higher-numbered node will always succeed. Routing in the reverse direction (high → low) will return a 404 "No hay ruta disponible" response unless bidirectional edges are added via `POST /api/nodos/conectar`.

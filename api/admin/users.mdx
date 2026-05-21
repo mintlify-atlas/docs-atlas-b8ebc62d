@@ -1,0 +1,169 @@
+---
+title: "Admin API: block and unblock user accounts"
+description: "Suspend or reinstate user accounts from the admin panel. Blocking revokes all active sessions; unblocking restores access with an inactive status."
+---
+
+The admin user-management endpoints let administrators suspend and reinstate user accounts without deleting them. Blocking a user immediately invalidates all of their active Sanctum tokens, preventing further API access. Unblocking resets the user's status to `inactivo` so they can log in again. Both endpoints are protected by `auth:sanctum` middleware and should be further restricted to admin-role users in production.
+
+<Warning>
+  These endpoints require a valid Bearer token from an authenticated admin account. Calling them with a regular user token will return `401 Unauthorized`. Ensure your production middleware enforces admin-role authorization in addition to Sanctum authentication.
+</Warning>
+
+---
+
+## Block a user
+
+Sets the target user's `status_id` to the `bloqueado` status and deletes all of their active Sanctum tokens, immediately ending every session.
+
+```
+POST /api/admin/users/{userId}/block
+```
+
+<ParamField path="userId" type="integer" required>
+  The numeric ID of the user to block. Sourced from the `users` table. Returns `404` if the user is not found.
+</ParamField>
+
+<CodeGroup>
+
+```bash curl
+curl -s -X POST https://your-api.example.com/api/admin/users/42/block \
+  -H "Authorization: Bearer {admin_token}"
+```
+
+```javascript fetch
+const res = await fetch("https://your-api.example.com/api/admin/users/42/block", {
+  method: "POST",
+  headers: {
+    Authorization: "Bearer {admin_token}",
+  },
+});
+const data = await res.json();
+```
+
+</CodeGroup>
+
+**Example response — 200 OK**
+
+```json
+{
+  "message": "Usuario bloqueado exitosamente",
+  "user": {
+    "id": 42,
+    "name": "María Pérez",
+    "email": "maria.perez@universidad.edu.co",
+    "status": "bloqueado"
+  }
+}
+```
+
+### What happens when a user is blocked
+
+- `status_id` is updated to the ID of the `bloqueado` record in `user_status`.
+- All Sanctum personal access tokens owned by the user are deleted from `personal_access_tokens`.
+- The user's next login attempt will be rejected (login logic checks `status_id`).
+- No data is deleted — the account is fully recoverable by calling the unblock endpoint.
+
+---
+
+## Unblock a user
+
+Resets the target user's `status_id` to `inactivo`, which permits them to log in again.
+
+```
+POST /api/admin/users/{userId}/unblock
+```
+
+<ParamField path="userId" type="integer" required>
+  The numeric ID of the user to unblock. Returns `404` if the user is not found.
+</ParamField>
+
+<CodeGroup>
+
+```bash curl
+curl -s -X POST https://your-api.example.com/api/admin/users/42/unblock \
+  -H "Authorization: Bearer {admin_token}"
+```
+
+```javascript fetch
+const res = await fetch("https://your-api.example.com/api/admin/users/42/unblock", {
+  method: "POST",
+  headers: {
+    Authorization: "Bearer {admin_token}",
+  },
+});
+const data = await res.json();
+```
+
+</CodeGroup>
+
+**Example response — 200 OK**
+
+```json
+{
+  "message": "Usuario desbloqueado exitosamente",
+  "user": {
+    "id": 42,
+    "name": "María Pérez",
+    "email": "maria.perez@universidad.edu.co",
+    "status": "inactivo"
+  }
+}
+```
+
+<Note>
+  Unblocking sets the status to `inactivo`, not `activo`. The user must complete the normal login flow (including any 2FA steps) to obtain a new token and become fully active.
+</Note>
+
+---
+
+## Response fields
+
+<ResponseField name="message" type="string">
+  Human-readable confirmation of the action performed.
+</ResponseField>
+
+<ResponseField name="user.id" type="integer">
+  The user's primary key.
+</ResponseField>
+
+<ResponseField name="user.name" type="string">
+  The user's display name.
+</ResponseField>
+
+<ResponseField name="user.email" type="string">
+  The user's email address.
+</ResponseField>
+
+<ResponseField name="user.status" type="string">
+  The user's resolved status name after the operation. `"bloqueado"` after blocking; `"inactivo"` after unblocking.
+</ResponseField>
+
+---
+
+## User status reference
+
+| Status      | Description                                                              |
+|-------------|--------------------------------------------------------------------------|
+| `activo`    | Account in good standing. Can access all authenticated endpoints.        |
+| `inactivo`  | Account exists but the user is not currently logged in (default after unblock). |
+| `bloqueado` | Account suspended. All tokens revoked; login is denied.                  |
+
+---
+
+## Error responses
+
+**401 Unauthorized** — missing or invalid Bearer token
+
+```json
+{
+  "message": "Unauthenticated."
+}
+```
+
+**404 Not Found** — `userId` does not match any user
+
+```json
+{
+  "message": "No query results for model [App\\Models\\User] 42."
+}
+```

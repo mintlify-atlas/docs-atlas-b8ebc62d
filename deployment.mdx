@@ -1,0 +1,182 @@
+---
+title: "Deploy UniMaps backend and frontend on Railway"
+description: "Step-by-step guide to deploying the UniMaps Laravel backend and Vue 3 frontend as separate Railway services with a MySQL database."
+---
+
+Railway is the recommended platform for deploying UniMaps. You will create two Railway services — one for the Laravel backend (`Clase1/`) and one for the Vue 3 frontend (`itfip-map/`) — plus a managed MySQL database. This page covers every step from connecting your repository to running your first migration.
+
+<Warning>
+  You must set a valid `APP_KEY` before the backend will start. Generate it locally with `php artisan key:generate --show` and paste the result into Railway's **Environment Variables** panel. A missing or empty `APP_KEY` is the most common cause of immediate crashes after deploy.
+</Warning>
+
+## Backend deployment
+
+<Steps>
+  <Step title="Connect your repository">
+    Go to [railway.com/dashboard](https://railway.com/dashboard) and create a new project.
+
+    Choose **Deploy from GitHub repo** and select the `Jcofles/Proyecto-web` repository (or your fork). Railway will detect it as a PHP/Laravel application.
+  </Step>
+
+  <Step title="Set the root directory">
+    In your service's **Settings**, set the **Root Directory** to `Clase1`.
+
+    If Railway does not support changing the root directory for your plan, leave it blank — the `Procfile` at the repository root will instruct Railway to change into `Clase1` automatically:
+
+    ```
+    web: cd Clase1 && php artisan serve --host=0.0.0.0 --port=${PORT}
+    release: cd Clase1 && php artisan migrate --force && php artisan db:seed --class=CampusItfipSeeder --force
+    ```
+
+    When the root directory is correctly set to `Clase1`, Railway uses the service-level Procfile instead:
+
+    ```
+    web: php artisan serve --host=0.0.0.0 --port=${PORT}
+    release: php artisan migrate --force && php artisan db:seed --class=CampusItfipSeeder --force
+    ```
+
+    The `release` command runs migrations and seeds the campus coordinate data automatically on every deploy.
+  </Step>
+
+  <Step title="Provision a MySQL database">
+    In your Railway project, click **New** → **Database** → **MySQL**.
+
+    Railway injects `MYSQLHOST`, `MYSQLPORT`, `MYSQLDATABASE`, `MYSQLUSER`, and `MYSQLPASSWORD` variables into connected services automatically. You can reference these directly or remap them to the `DB_*` names that Laravel expects (see the next step).
+  </Step>
+
+  <Step title="Add environment variables">
+    In your backend service, open **Variables** and add the following. Replace placeholder values with your actual Railway-provided URLs and credentials.
+
+    ```bash
+    APP_NAME=ITFIP Maps
+    APP_ENV=production
+    APP_DEBUG=false
+    APP_KEY=base64:YOUR_GENERATED_KEY_HERE
+
+    APP_URL=https://your-backend.up.railway.app
+    APP_FRONTEND_URL=https://your-frontend.up.railway.app
+
+    DB_CONNECTION=mysql
+    DB_HOST=your-mysql-host.railway.internal
+    DB_PORT=3306
+    DB_DATABASE=your_database
+    DB_USERNAME=your_username
+    DB_PASSWORD=your_password
+
+    SESSION_DRIVER=database
+    SESSION_LIFETIME=120
+    SESSION_ENCRYPT=false
+    SESSION_PATH=/
+    SESSION_DOMAIN=.up.railway.app
+
+    SANCTUM_STATEFUL_DOMAINS=your-frontend.up.railway.app
+
+    MAIL_MAILER=smtp
+    MAIL_HOST=smtp.gmail.com
+    MAIL_PORT=587
+    MAIL_USERNAME=your_email@gmail.com
+    MAIL_PASSWORD=your_gmail_app_password
+    MAIL_ENCRYPTION=tls
+    MAIL_FROM_ADDRESS=your_email@gmail.com
+    MAIL_FROM_NAME="ITFIP Maps"
+
+    FILESYSTEM_DISK=local
+    QUEUE_CONNECTION=database
+
+    VITE_APP_NAME="ITFIP Maps"
+    VITE_API_URL=https://your-backend.up.railway.app/api
+    ```
+
+    To generate `APP_KEY` locally before deploying:
+
+    ```bash
+    cd Clase1
+    php artisan key:generate --show
+    ```
+
+    Copy the output (it starts with `base64:`) and paste it as the value of `APP_KEY` in Railway.
+  </Step>
+
+  <Step title="Deploy and verify">
+    Trigger a deploy. Watch the **Deploy Logs** tab.
+
+    - The `release` phase runs `php artisan migrate --force` followed by the campus seeder.
+    - The `web` phase starts the Laravel server on the Railway-assigned `$PORT`.
+
+    Once the deploy is green, open `https://your-backend.up.railway.app/api/nodos` in your browser. You should see a JSON response similar to `{"data":[...]}` confirming the API is live and the database is seeded.
+
+    If the deploy fails, check for these common causes:
+    - `APP_KEY` is empty or malformed.
+    - Database credentials are incorrect or the MySQL service is not yet ready — wait a moment and redeploy.
+    - The `release` command failed before the database was ready. Temporarily comment out the `release` line in the Procfile, deploy, then run `php artisan migrate --force` manually from the Railway shell.
+  </Step>
+</Steps>
+
+## Frontend deployment
+
+<Steps>
+  <Step title="Create a new service for the frontend">
+    In the same Railway project, click **New** → **GitHub Repo** and select the same repository.
+
+    Set the **Root Directory** to `itfip-map` and the build command to:
+
+    ```bash
+    npm install && npm run build
+    ```
+
+    Set the start command to serve the built output. If Railway detects a Node service, you can use a simple static server:
+
+    ```bash
+    npx serve dist --listen $PORT
+    ```
+  </Step>
+
+  <Step title="Set frontend environment variables">
+    The only required variable for the frontend is the backend API URL:
+
+    ```bash
+    VITE_API_URL=https://your-backend.up.railway.app/api
+    ```
+
+    This value is baked into the Vite build at compile time, so you must redeploy the frontend any time the backend URL changes.
+  </Step>
+
+  <Step title="Deploy the frontend">
+    Trigger a deploy. Once complete, your frontend will be live at `https://your-frontend.up.railway.app`.
+
+    Open the URL in a browser. You should see the UniMaps login screen.
+  </Step>
+</Steps>
+
+## CORS and Sanctum configuration
+
+<Note>
+  Because the SPA and API run on different origins (separate Railway subdomains), you must configure Sanctum and CORS correctly or every authenticated request will be rejected.
+
+  Ensure these variables are set on the **backend** service:
+
+  ```bash
+  SANCTUM_STATEFUL_DOMAINS=your-frontend.up.railway.app
+  SESSION_DOMAIN=.up.railway.app
+  APP_FRONTEND_URL=https://your-frontend.up.railway.app
+  ```
+
+  Laravel reads `APP_FRONTEND_URL` to build allowed CORS origins. If you change your frontend subdomain, update all three values and redeploy the backend.
+</Note>
+
+## Post-deployment tasks
+
+After both services are running, run the following commands from the Railway shell (or locally via `php artisan` pointed at the production database) if you need to reset state:
+
+```bash
+# Clear configuration and route caches after .env changes
+php artisan config:clear
+php artisan cache:clear
+php artisan route:clear
+
+# Import campus coordinates from the SQL snapshot
+php artisan import:coordenadas --truncate
+
+# Inspect application logs
+# storage/logs/laravel.log
+```

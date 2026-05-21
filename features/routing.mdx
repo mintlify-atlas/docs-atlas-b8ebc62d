@@ -1,0 +1,205 @@
+---
+title: "Campus Routing: Find the Shortest Path"
+description: "Learn how UniMaps calculates the shortest walking route across the ITFIP campus using Dijkstra algorithm on a 51-node graph with Haversine distances."
+---
+
+When you select a destination on the map, UniMaps immediately draws the shortest walking path from your current position to that location. The route is computed by a Dijkstra implementation that runs against a campus graph of 51 nodes and 50 directed connections, all stored in memory on the Laravel backend for fast, zero-query response times.
+
+## The campus graph
+
+The graph represents every navigable point on the ITFIP campus as a **node** and every walkable connection between two points as an **edge**. Here are the key numbers:
+
+| Property | Value |
+|---|---|
+| Total nodes | 51 |
+| Total connections | 50 |
+| Node types | pasillo, salon, baño, escaleras |
+| Graph representation | Adjacency list |
+| Distance unit | Meters |
+
+Each node has an `id`, a human-readable `nombre`, `latitud`/`longitud` coordinates, a `tipo_id` (node type), and a `piso` (floor number). Connections store the Euclidean distance between the two nodes in meters.
+
+## How distances are calculated
+
+Before the graph is built, the distance between any two coordinate pairs is measured with the **Haversine formula**, which accounts for the curvature of the Earth and returns a result in meters:
+
+```php
+private function distanciaHaversine(float $lat1, float $lon1, float $lat2, float $lon2): float
+{
+    $radioTierra = 6371000; // Earth's radius in meters
+
+    $dLat = deg2rad($lat2 - $lat1);
+    $dLon = deg2rad($lon2 - $lon1);
+
+    $a = sin($dLat / 2) * sin($dLat / 2) +
+         cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
+         sin($dLon / 2) * sin($dLon / 2);
+
+    $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+
+    return $radioTierra * $c; // result in meters
+}
+```
+
+The same formula is available on the frontend inside `useGeolocation.js` for computing the distance between your GPS position and campus nodes.
+
+## Dijkstra's algorithm
+
+The route endpoint uses a standard Dijkstra implementation over the campus adjacency list. It starts at the origin node, relaxes each edge, and reconstructs the path by following parent pointers back from the destination:
+
+```php
+// Initialize distances — 0 for origin, infinity for all others
+foreach ($nodos as $id => $nodo) {
+    $distancias[$id] = ($id == $origen) ? 0 : PHP_INT_MAX;
+    $padres[$id] = null;
+}
+
+// Relax edges
+for ($i = 0; $i < count($nodos); $i++) {
+    // Pick unvisited node with smallest known distance
+    $nodoActual = ...;
+
+    foreach ($grafo[$nodoActual] as $vecino) {
+        $nuevaDist = $distancias[$nodoActual] + $vecino['distancia'];
+        if ($nuevaDist < $distancias[$vecinoId]) {
+            $distancias[$vecinoId] = $nuevaDist;
+            $padres[$vecinoId] = $nodoActual;
+        }
+    }
+}
+```
+
+<Note>
+Because all 51 nodes and 50 connections are stored in a static PHP array (not read from the database), every routing request runs entirely in memory. This eliminates query overhead and keeps response times fast even under concurrent load.
+</Note>
+
+## How to request a route
+
+### Pick origin and destination
+
+On the map, your current GPS position is automatically snapped to the nearest node in the graph, which becomes the origin. You select the destination from the search box in the bottom-left HUD panel. Typing filters the list to matching mapped zones.
+
+<Steps>
+  <Step title="Open the map">
+    Navigate to `/map`. The app locates you and places a blue marker at the nearest mapped node.
+  </Step>
+  <Step title="Type a destination">
+    Use the "¿A dónde vas?" search field to find a destination. Currently mapped zones are **Entrada Universidad**, **Bloque D**, and **Cafetería**.
+  </Step>
+  <Step title="Select a result">
+    Tap any result in the dropdown. The route is calculated immediately and drawn on the map as an animated dashed green polyline.
+  </Step>
+  <Step title="Review the estimate">
+    The HUD shows the total distance in meters and the estimated walking time based on a speed of 1.4 m/s.
+  </Step>
+</Steps>
+
+### API call
+
+You can also call the route endpoint directly:
+
+```http
+GET /api/nodos/ruta/{origen}/{destino}
+```
+
+**Example** — shortest path from node 1 (Entrada Universidad) to node 49 (Cafetería):
+
+```http
+GET /api/nodos/ruta/1/49
+```
+
+### Route response
+
+A successful response includes the origin and destination node objects, the total distance in meters, the number of steps, and the full ordered list of nodes that make up the path:
+
+```json
+{
+  "origen": {
+    "id": 1,
+    "nombre": "Entrada Universidad",
+    "latitud": 4.15402640,
+    "longitud": -74.89564350,
+    "tipo_id": 2,
+    "piso": 1
+  },
+  "destino": {
+    "id": 49,
+    "nombre": "Cafeteria",
+    "latitud": 4.15692990,
+    "longitud": -74.89763710,
+    "tipo_id": 2,
+    "piso": 1
+  },
+  "distancia_total": 342.57,
+  "pasos": 48,
+  "ruta": [
+    { "id": 1, "nombre": "Entrada Universidad", "latitud": 4.15402640, "longitud": -74.89564350, "tipo_id": 2, "piso": 1 },
+    { "id": 2, "nombre": "Paso 2",              "latitud": 4.15409380, "longitud": -74.89572580, "tipo_id": 2, "piso": 1 },
+    "..."
+    { "id": 49, "nombre": "Cafeteria",           "latitud": 4.15692990, "longitud": -74.89763710, "tipo_id": 2, "piso": 1 }
+  ]
+}
+```
+
+If either node ID does not exist, or no path connects the two nodes, the API returns a `404` response:
+
+```json
+{
+  "error": "No hay ruta disponible entre estos nodos"
+}
+```
+
+## Route visualization
+
+The frontend draws the route as three stacked Leaflet polylines for a glowing effect:
+
+| Layer | Color | Purpose |
+|---|---|---|
+| Glow | `#00ff00` at 12% opacity, weight 14 | Soft outer glow |
+| Base | `#004400` solid, weight 5 | Dark green backbone |
+| Dash | `#00ff00` dashed, weight 5 | Animated dashes |
+| Progress | `#ff4444` solid, weight 6 | Portion already walked |
+
+A red destination pin is placed at the final node, and the map auto-fits its viewport around the entire route.
+
+## Route simulation
+
+Once a route is drawn, you can tap **Iniciar Recorrido** to simulate walking it. The animated marker travels along the path at **1.4 m/s**, matching a typical pedestrian pace. The red progress layer grows as the marker advances, and a percentage bar in the HUD reflects completion.
+
+<Tip>
+Route simulation is useful for previewing a path before you start walking, or for testing routing behavior during development without leaving your desk.
+</Tip>
+
+## Finding the nearest node
+
+If you need to find which campus node is closest to any set of coordinates, use the nearest-node endpoint:
+
+```http
+POST /api/nodos/mas-cercano
+Content-Type: application/json
+
+{
+  "latitud": 4.1563,
+  "longitud": -74.8975
+}
+```
+
+The response includes the requesting coordinates and the closest node with its pre-calculated distance:
+
+```json
+{
+  "ubicacion_actual": {
+    "latitud": 4.1563,
+    "longitud": -74.8975
+  },
+  "nodo_mas_cercano": {
+    "id": 17,
+    "nombre": "Punto Central",
+    "latitud": 4.15523300,
+    "longitud": -74.89656430,
+    "tipo_id": 2,
+    "piso": 1,
+    "distancia": 14.72
+  }
+}
+```

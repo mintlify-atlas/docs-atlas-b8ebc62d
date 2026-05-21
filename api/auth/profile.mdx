@@ -1,0 +1,321 @@
+---
+title: 'GET and PUT /api/auth/user — profile management'
+description: 'Retrieve the authenticated user profile, update name or email with OTP verification, and permanently delete the account. Requires Bearer token.'
+---
+
+All endpoints on this page require an `Authorization: Bearer {token}` header. The token is obtained from a successful login via `POST /api/auth/login` or `POST /api/auth/two-factor/verify`. Requests made without a valid token receive a `401 Unauthenticated` response.
+
+<Note>
+  Obtain a bearer token first via [login](/api/auth/login) before calling any endpoint on this page.
+</Note>
+
+---
+
+## GET /api/auth/user
+
+Returns the full profile of the currently authenticated user.
+
+**Headers**
+
+| Header | Value |
+|---|---|
+| `Authorization` | `Bearer {token}` |
+
+### Responses
+
+<ResponseField name="user" type="object">
+  The authenticated user's profile data.
+</ResponseField>
+
+<ResponseField name="user.id" type="integer">
+  Unique user identifier.
+</ResponseField>
+
+<ResponseField name="user.name" type="string">
+  Full display name, computed from `nombres` and `apellidos`.
+</ResponseField>
+
+<ResponseField name="user.nombres" type="string">
+  First name(s).
+</ResponseField>
+
+<ResponseField name="user.apellidos" type="string">
+  Last name(s).
+</ResponseField>
+
+<ResponseField name="user.email" type="string">
+  Primary email address.
+</ResponseField>
+
+<ResponseField name="user.secure_email" type="string">
+  Backup email address used for secure key delivery.
+</ResponseField>
+
+<ResponseField name="user.secure_key_downloaded_at" type="string | null">
+  ISO 8601 timestamp of the last time the `.jw` file was downloaded, or `null` if never downloaded.
+</ResponseField>
+
+<ResponseField name="user.secure_key_generated_at" type="string | null">
+  ISO 8601 timestamp when the secure key was generated.
+</ResponseField>
+
+<ResponseField name="user.two_factor_enabled" type="boolean">
+  Whether two-factor authentication is currently active.
+</ResponseField>
+
+<CodeGroup>
+
+```bash Get current user
+curl -X GET https://your-api.up.railway.app/api/auth/user \
+  -H "Authorization: Bearer 1|abc123..."
+```
+
+</CodeGroup>
+
+**200 — Profile returned**
+
+```json
+{
+  "user": {
+    "id": 42,
+    "name": "María López",
+    "nombres": "María",
+    "apellidos": "López",
+    "email": "maria@itfip.edu.co",
+    "secure_email": "maria.backup@gmail.com",
+    "secure_key_downloaded_at": "2026-04-10T14:23:00Z",
+    "secure_key_generated_at": "2026-04-01T09:00:00Z",
+    "two_factor_enabled": false
+  }
+}
+```
+
+**401 — Unauthenticated**
+
+```json
+{ "message": "Unauthenticated." }
+```
+
+---
+
+## PUT /api/auth/update-profile
+
+Updates one or more profile fields for the authenticated user. All fields are optional — only the fields included in the request body are updated.
+
+Changing `email` initiates a verification flow: a 6-digit OTP is sent to the new address and the email is not updated until `/api/auth/verify-email-change` is called with the correct code.
+
+**Headers**
+
+| Header | Value |
+|---|---|
+| `Authorization` | `Bearer {token}` |
+
+<ParamField body="nombres" type="string">
+  Updated first name(s). Letters and spaces only. Maximum 191 characters.
+</ParamField>
+
+<ParamField body="apellidos" type="string">
+  Updated last name(s). Letters and spaces only. Maximum 191 characters.
+</ParamField>
+
+<ParamField body="name" type="string">
+  Full name as a single string. The server splits it at the first space into `nombres` and `apellidos`.
+</ParamField>
+
+<ParamField body="email" type="string">
+  New primary email address. Must be unique. Triggers OTP verification; does not update immediately.
+</ParamField>
+
+<Note>
+  Password changes are not supported via this endpoint. To reset your password, use the [forgot-password flow](/api/auth/login#post-apiauthforgot-password).
+</Note>
+
+### Responses
+
+<ResponseField name="message" type="string">
+  Result description.
+</ResponseField>
+
+<ResponseField name="user" type="object">
+  Updated user data (`id`, `name`, `nombres`, `apellidos`, `email`, `status`). Present when no email change was requested.
+</ResponseField>
+
+<ResponseField name="requires_verification" type="boolean">
+  `true` when an email change was requested and an OTP has been sent to the new address.
+</ResponseField>
+
+<ResponseField name="new_email" type="string">
+  The pending new email address awaiting OTP confirmation.
+</ResponseField>
+
+<CodeGroup>
+
+```bash Update name
+curl -X PUT https://your-api.up.railway.app/api/auth/update-profile \
+  -H "Authorization: Bearer 1|abc123..." \
+  -H "Content-Type: application/json" \
+  -d '{"nombres": "Ana", "apellidos": "García"}'
+```
+
+```bash Request email change
+curl -X PUT https://your-api.up.railway.app/api/auth/update-profile \
+  -H "Authorization: Bearer 1|abc123..." \
+  -H "Content-Type: application/json" \
+  -d '{"email": "new.address@itfip.edu.co"}'
+```
+
+</CodeGroup>
+
+**200 — Profile updated**
+
+```json
+{
+  "message": "Perfil actualizado exitosamente",
+  "user": {
+    "id": 42,
+    "name": "Ana García",
+    "nombres": "Ana",
+    "apellidos": "García",
+    "email": "maria@itfip.edu.co",
+    "status": "activo"
+  }
+}
+```
+
+**200 — Email change initiated**
+
+```json
+{
+  "message": "Código de verificación enviado al nuevo email",
+  "requires_verification": true,
+  "new_email": "new.address@itfip.edu.co"
+}
+```
+
+**422 — Validation failed**
+
+```json
+{
+  "message": "Datos inválidos",
+  "errors": { "email": ["El correo ya está registrado"] }
+}
+```
+
+<Note>
+  Sending `email` in the request body does not change the email immediately. The current email remains active until the OTP is verified via `/api/auth/verify-email-change`. The OTP expires after 15 minutes.
+</Note>
+
+---
+
+## POST /api/auth/verify-email-change
+
+Confirms an email address change initiated by `PUT /api/auth/update-profile`. Submit the 6-digit OTP that was sent to the new address. On success, the account's primary email is updated.
+
+**Headers**
+
+| Header | Value |
+|---|---|
+| `Authorization` | `Bearer {token}` |
+
+<ParamField body="code" type="string" required>
+  The 6-digit numeric OTP sent to the new email address. Exactly 6 characters. Expires after 15 minutes.
+</ParamField>
+
+### Responses
+
+<ResponseField name="message" type="string">
+  `"Email actualizado exitosamente"` on success.
+</ResponseField>
+
+<ResponseField name="user" type="object">
+  Updated user data reflecting the new email address.
+</ResponseField>
+
+<CodeGroup>
+
+```bash Verify email change
+curl -X POST https://your-api.up.railway.app/api/auth/verify-email-change \
+  -H "Authorization: Bearer 1|abc123..." \
+  -H "Content-Type: application/json" \
+  -d '{"code": "293847"}'
+```
+
+</CodeGroup>
+
+**200 — Email updated**
+
+```json
+{
+  "message": "Email actualizado exitosamente",
+  "user": {
+    "id": 42,
+    "name": "María López",
+    "nombres": "María",
+    "apellidos": "López",
+    "email": "new.address@itfip.edu.co",
+    "status": "activo"
+  }
+}
+```
+
+**422 — Wrong or expired code**
+
+```json
+{ "message": "Código incorrecto" }
+```
+
+```json
+{ "message": "Código expirado" }
+```
+
+**422 — Validation error**
+
+```json
+{
+  "message": "Código inválido",
+  "errors": { "code": ["The code must be 6 characters."] }
+}
+```
+
+---
+
+## DELETE /api/auth/delete-account
+
+Soft-deletes the authenticated user's account. The account email is obfuscated to free the address for future registrations, the account status is set to `eliminado`, all active tokens are revoked, and a confirmation email is sent to the original address.
+
+**Headers**
+
+| Header | Value |
+|---|---|
+| `Authorization` | `Bearer {token}` |
+
+### Responses
+
+<ResponseField name="message" type="string">
+  `"Cuenta eliminada exitosamente"` on success.
+</ResponseField>
+
+<CodeGroup>
+
+```bash Delete account
+curl -X DELETE https://your-api.up.railway.app/api/auth/delete-account \
+  -H "Authorization: Bearer 1|abc123..."
+```
+
+</CodeGroup>
+
+**200 — Account deleted**
+
+```json
+{ "message": "Cuenta eliminada exitosamente" }
+```
+
+**401 — Unauthenticated**
+
+```json
+{ "message": "Unauthenticated." }
+```
+
+<Warning>
+  Account deletion is irreversible. The original email address is released and may be registered by another user afterward. All active sessions are terminated immediately. Any campus navigation data associated with the account is retained in the database under the soft-deleted record but is no longer accessible through the API.
+</Warning>

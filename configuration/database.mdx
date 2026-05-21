@@ -1,0 +1,116 @@
+---
+title: 'Database Setup and Schema for UniMaps'
+description: 'Configure MySQL for UniMaps, run migrations to create the schema, seed campus node data, and review the tables the application depends on.'
+---
+
+UniMaps stores all user accounts, campus map nodes, path connections, and security codes in a MySQL database. This page explains how to point the application at your database server, how to initialize the schema, and what tables are created.
+
+## Supported database
+
+UniMaps requires **MySQL** (or a MySQL-compatible server such as MariaDB). The `DB_CONNECTION` variable must be set to `mysql`; other drivers listed in `config/database.php` (SQLite, PostgreSQL, SQL Server) are not supported for production use.
+
+## Required environment variables
+
+Set these in your `.env` file or your deployment platform's environment variable UI.
+
+| Variable | Example value | Description |
+|---|---|---|
+| `DB_CONNECTION` | `mysql` | Database driver. Must be `mysql`. |
+| `DB_HOST` | `127.0.0.1` | Hostname or IP address of the MySQL server. |
+| `DB_PORT` | `3306` | Port the MySQL server listens on. The MySQL default is `3306`. |
+| `DB_DATABASE` | `unimaps` | Name of the database schema. The schema must already exist before running migrations. |
+| `DB_USERNAME` | `unimaps_user` | MySQL user. This user must have `CREATE`, `ALTER`, `DROP`, `INSERT`, `UPDATE`, `DELETE`, and `SELECT` privileges on `DB_DATABASE`. |
+| `DB_PASSWORD` | *(secret)* | Password for `DB_USERNAME`. |
+
+```dotenv
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=unimaps
+DB_USERNAME=unimaps_user
+DB_PASSWORD=your_password
+```
+
+<Note>
+On Railway, add the **MySQL plugin** to your project. Railway automatically injects `MYSQLHOST`, `MYSQLPORT`, `MYSQLDATABASE`, `MYSQLUSER`, and `MYSQLPASSWORD` variables. Map these to the `DB_*` names expected by Laravel in the service's "Variables" tab, or create a reference variable (e.g., `DB_HOST=$MYSQLHOST`).
+</Note>
+
+## Running migrations
+
+UniMaps uses Laravel migrations to create and update the database schema. Run migrations from the `Clase1/` directory:
+
+```bash
+cd Clase1
+php artisan migrate
+```
+
+On Railway (and other platforms with a release phase), this command runs automatically if you have configured the `release` entry in your `Procfile`:
+
+```bash
+# Clase1/Procfile
+release: php artisan migrate --force
+web: php artisan serve --host=0.0.0.0 --port=$PORT
+```
+
+<Warning>
+Always ensure the database server is reachable and `DB_*` credentials are correct before running migrations. A misconfigured `DB_HOST` or wrong password will cause the migrate command to fail, and on Railway this will prevent the service from starting.
+</Warning>
+
+## Seeding initial campus data
+
+The default seeder loads the ITFIP campus map data (nodes and connections for the physical campus layout). Run it after migrations:
+
+```bash
+php artisan db:seed
+```
+
+This calls `CampusItfipSeeder`, which populates the `nodos`, `conexiones`, and `nodo_tipos` tables with the mapped locations and pathways for ITFIP university.
+
+<Note>
+If you need to import the full coordinate dataset from the SQL export, use the dedicated import command:
+
+```bash
+php artisan import:coordenadas --truncate
+```
+
+The `--truncate` flag clears any existing node data before importing, which is useful when re-seeding a fresh database.
+</Note>
+
+## Tables overview
+
+The following tables are created by migrations. They are listed in the order the migrations run.
+
+### User and authentication tables
+
+| Table | Purpose |
+|---|---|
+| `users` | Verified user accounts. A row is only inserted here after the user confirms their email. Includes `name`, `email`, `password`, `email_verified_at`, and a `status_id` foreign key. |
+| `pending_users` | Temporary holding table for registrations awaiting email verification. Contains `nombres`, `apellidos`, `email`, `password` (hashed), `email_verification_token`, and an expiry timestamp. Rows are removed once verification succeeds. |
+| `password_reset_tokens` | Standard Laravel token table for password reset flows. |
+| `password_reset_codes` | Six-digit numeric codes used by UniMaps' custom password reset flow. Each row ties a code to an email with an `expires_at` timestamp. |
+| `email_change_codes` | Six-digit codes for email address change verification. One pending change per user (`user_id` is unique). Stores the `new_email`, `code`, and expiry. |
+| `deleted_users_log` | Audit log of deleted accounts. Retains the user's original and anonymized email, who deleted the account (`self` or an admin ID), and the deletion reason. |
+| `user_status` | Lookup table of possible user statuses: `activo`, `inactivo`, `bloqueado`, `eliminado`. |
+| `login_attempts` | Tracks failed login attempts per email address. Used to enforce temporary lockouts via the `blocked_until` column. |
+| `sessions` | Session data when `SESSION_DRIVER=database`. |
+| `personal_access_tokens` | Sanctum API tokens for authenticated API access. |
+
+### Campus map tables
+
+| Table | Purpose |
+|---|---|
+| `nodos` | Map nodes representing physical locations on campus. Each row has a `nombre`, `latitud`, `longitud`, `piso` (floor), and a `tipo_id` foreign key to `nodo_tipos`. |
+| `nodo_tipos` | Lookup table of node categories: `salon` (classroom), `pasillo` (corridor), `baño` (bathroom), `escaleras` (stairs). Seeded automatically on first migration. |
+| `conexiones` | Directed edges between nodes. Each row links a `nodo_origen_id` to a `nodo_destino_id` and stores the `distancia` (distance in meters) used by the pathfinding algorithm. The `(nodo_origen_id, nodo_destino_id)` pair is unique. |
+
+### System tables
+
+| Table | Purpose |
+|---|---|
+| `jobs` | Queue job storage when `QUEUE_CONNECTION=database`. |
+| `cache` | Cache entries when `CACHE_STORE=database`. |
+| `migrations` | Laravel's migration history. Do not edit this table manually. |
+
+<Tip>
+When deploying to Railway, the MySQL plugin provisions a managed database automatically. You do not need to create the schema manually — Railway creates the database with the name it injects as `MYSQLDATABASE`. Just set `DB_DATABASE` to the same value and run migrations.
+</Tip>

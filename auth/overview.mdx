@@ -1,0 +1,92 @@
+---
+title: "Authentication in UniMaps: How Access Works"
+description: "How UniMaps authenticates users: email/password login, optional two-factor codes, secure key recovery, account statuses, and brute-force lockout."
+---
+
+UniMaps uses a layered authentication system to keep your account and campus navigation data secure. Every request to protected features requires a valid session token, and you have multiple ways to prove your identity — even if you forget your password.
+
+## Authentication layers
+
+UniMaps combines three independent mechanisms to protect your account:
+
+| Layer | When it applies |
+|---|---|
+| Email + password | Standard login for every session |
+| Two-factor authentication (2FA) | Optional second step via email code |
+| Secure key (.jw file) | Emergency access when email or password is unavailable |
+
+All three mechanisms are available at the login screen. You choose which one to use on any given sign-in.
+
+## How tokens work
+
+After a successful login, the API issues a **Laravel Sanctum Bearer token**. UniMaps stores this token in `localStorage` under the key `auth_token` and attaches it to every subsequent API request as an `Authorization` header:
+
+```http
+Authorization: Bearer <your_token>
+```
+
+To obtain a token, send your credentials to:
+
+```http
+POST /api/auth/login
+Content-Type: application/json
+
+{
+  "email": "tu@correo.com",
+  "password": "tuContraseña"
+}
+```
+
+A successful response returns the token in the `token` field. If 2FA is enabled, the response instead returns `"two_factor_required": true` and no token — you must complete the code verification step first.
+
+## Login flow
+
+<Steps>
+  <Step title="Enter your credentials">
+    Go to the login page and provide your registered email address and password.
+  </Step>
+  <Step title="2FA check (if enabled)">
+    If you have two-factor authentication enabled, UniMaps emails you a 12-character code. Enter it on the verification screen. The code expires in 3 minutes.
+  </Step>
+  <Step title="Token issued">
+    On successful authentication, the API returns a Sanctum Bearer token. The frontend saves it to `localStorage`.
+  </Step>
+  <Step title="Authenticated requests">
+    Every request to a protected endpoint automatically includes the `Authorization: Bearer <token>` header, granting access to the campus map, route planning, and your profile.
+  </Step>
+</Steps>
+
+## Account statuses
+
+Your account can be in one of four states. Your ability to log in depends on which state you are in:
+
+| Status | What it means for you |
+|---|---|
+| **activo** | Your account is verified and fully functional. |
+| **inactivo** | Your account exists but is not currently accessible. Contact support. |
+| **bloqueado** | Access has been suspended, usually after repeated failed login attempts or an admin action. You cannot log in while blocked. |
+| **eliminado** | Your account has been soft-deleted and is no longer accessible. |
+
+Only accounts in the `activo` state can complete a login.
+
+## Brute-force protection
+
+UniMaps limits incorrect login attempts to protect your account. After **5 consecutive failed attempts**, your account is locked out for **15 minutes**. During the lockout period the login button is disabled and a countdown timer is shown.
+
+<Warning>
+If you are locked out, wait for the countdown to expire or use the password recovery flow. Do not continue guessing — every failed attempt during a lockout extends the wait.
+</Warning>
+
+## Where to go next
+
+<CardGroup cols={3}>
+  <Card title="Create an Account" icon="user-plus" href="/auth/registration">
+    Learn how to register and verify your email address to activate your UniMaps account.
+  </Card>
+  <Card title="Two-Factor Authentication" icon="shield-check" href="/auth/two-factor">
+    Add an extra layer of security by requiring a time-limited email code on every login.
+  </Card>
+  <Card title="Secure Key Recovery" icon="key" href="/auth/secure-key">
+    Download your .jw recovery file and learn how to use it if you ever lose access to your password or email.
+  </Card>
+</CardGroup>

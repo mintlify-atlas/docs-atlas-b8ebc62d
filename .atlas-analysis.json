@@ -1,0 +1,112 @@
+{
+  "projectType": "saas",
+  "projectName": "UniMaps",
+  "projectDescription": "A full-stack campus navigation web application for ITFIP university, featuring interactive maps, shortest-path routing, and secure user authentication.",
+  "theme": "luma",
+  "primaryColor": "#2563EB",
+  "lightColor": "#EFF6FF",
+  "darkColor": "#1E3A8A",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "deployment"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/campus-map",
+              "features/routing",
+              "features/dashboard"
+            ]
+          },
+          {
+            "group": "Authentication",
+            "pages": [
+              "auth/overview",
+              "auth/registration",
+              "auth/two-factor",
+              "auth/secure-key"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/environment",
+              "configuration/email",
+              "configuration/database"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Authentication API",
+            "pages": [
+              "api/auth/login",
+              "api/auth/register",
+              "api/auth/two-factor",
+              "api/auth/profile"
+            ]
+          },
+          {
+            "group": "Map API",
+            "pages": [
+              "api/map/nodes",
+              "api/map/routing",
+              "api/map/connections"
+            ]
+          },
+          {
+            "group": "Admin API",
+            "pages": [
+              "api/admin/users"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Interactive Leaflet-powered campus map with 51 pre-configured waypoints",
+    "Dijkstra shortest-path routing between campus locations",
+    "Real-time geolocation tracking and device compass orientation",
+    "Route simulation with animated marker movement at walking speed",
+    "Two-factor authentication via email OTP codes",
+    "Secure key recovery system using HMAC-SHA256 generated .jw files",
+    "Email verification two-phase registration with pending_users staging",
+    "Brute-force login protection with 15-minute account lockout",
+    "Dashboard with usage stats, favorites, recent searches, and quick actions",
+    "Progressive Web App (PWA) support",
+    "Dark/light mode toggle with session persistence",
+    "One-command Railway deployment"
+  ],
+  "publicApiSurface": [
+    "POST /api/auth/login",
+    "POST /api/auth/register",
+    "POST /api/auth/verify-email",
+    "POST /api/auth/two-factor/verify",
+    "POST /api/auth/login-with-key",
+    "POST /api/auth/forgot-password",
+    "POST /api/auth/reset-password",
+    "GET /api/auth/user",
+    "PUT /api/auth/update-profile",
+    "DELETE /api/auth/delete-account",
+    "GET /api/nodos",
+    "GET /api/nodos/buscar?q=",
+    "POST /api/nodos/mas-cercano",
+    "GET /api/nodos/ruta/{origen}/{destino}",
+    "GET /api/conexiones",
+    "POST /api/admin/users/{userId}/block",
+    "POST /api/admin/users/{userId}/unblock"
+  ]
+}

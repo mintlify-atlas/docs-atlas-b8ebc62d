@@ -1,0 +1,382 @@
+---
+title: 'Authentication endpoints: login and password reset'
+description: 'Log in with email and password, reset a forgotten password via a 6-digit code, log in with a .jw secure key file, or revoke the current session token.'
+---
+
+These endpoints cover the core login flow for UniMaps: credential-based login that optionally triggers two-factor authentication, a three-step password reset flow (send code → verify code → reset), an alternative login path using a downloaded `.jw` secure key file, and logout. All responses are JSON. Repeated failed login attempts trigger a 15-minute account lockout tracked server-side per email address.
+
+---
+
+## POST /api/auth/login
+
+Authenticates a user with email and password. On success, returns a Sanctum bearer token. If the user has two-factor authentication enabled, the token is withheld and a 2FA code is sent to the registered email instead.
+
+<ParamField body="email" type="string" required>
+  The user's registered email address.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  The user's password.
+</ParamField>
+
+### Responses
+
+<ResponseField name="message" type="string">
+  Human-readable result message.
+</ResponseField>
+
+<ResponseField name="token" type="string">
+  Sanctum bearer token. Present only when login succeeds and 2FA is not required.
+</ResponseField>
+
+<ResponseField name="two_factor_required" type="boolean">
+  `true` when the account has 2FA enabled. No token is returned in this case.
+</ResponseField>
+
+<ResponseField name="expires_in" type="integer">
+  Seconds until the 2FA code expires (180 seconds). Present only when `two_factor_required` is `true`.
+</ResponseField>
+
+<ResponseField name="user" type="object">
+  Basic user data (`id`, `name`, `email`, `status`). Present only on successful login without 2FA.
+</ResponseField>
+
+<ResponseField name="blocked" type="boolean">
+  `true` when the account is temporarily locked due to repeated failed attempts.
+</ResponseField>
+
+<ResponseField name="remaining_seconds" type="integer">
+  Seconds remaining in the lockout period. Present when `blocked` is `true`.
+</ResponseField>
+
+<ResponseField name="remaining_attempts" type="integer">
+  Failed attempts still allowed before lockout. Present when credentials are wrong but the account is not yet locked.
+</ResponseField>
+
+<CodeGroup>
+
+```bash Login
+curl -X POST https://your-api.up.railway.app/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "student@itfip.edu.co", "password": "secret1234"}'
+```
+
+```bash Login (2FA account)
+curl -X POST https://your-api.up.railway.app/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "student@itfip.edu.co", "password": "secret1234"}'
+```
+
+</CodeGroup>
+
+**200 — Login successful**
+
+```json
+{
+  "message": "Login exitoso",
+  "token": "1|abc123...",
+  "user": {
+    "id": 42,
+    "name": "María López",
+    "email": "student@itfip.edu.co",
+    "status": "activo"
+  }
+}
+```
+
+**200 — 2FA required**
+
+```json
+{
+  "message": "Código de autenticación enviado al correo registrado",
+  "two_factor_required": true,
+  "expires_in": 180
+}
+```
+
+**401 — Wrong credentials**
+
+```json
+{
+  "message": "Credenciales incorrectas",
+  "remaining_attempts": 3
+}
+```
+
+**403 — Account blocked by admin or unverified email**
+
+```json
+{ "message": "Tu cuenta ha sido bloqueada. Contacta al administrador." }
+```
+
+**429 — Too many failed attempts**
+
+```json
+{
+  "message": "Cuenta bloqueada por 15 minutos debido a múltiples intentos fallidos",
+  "blocked": true,
+  "remaining_seconds": 900
+}
+```
+
+<Note>
+  The account is locked for 15 minutes after 5 consecutive failed attempts for an existing email address. Attempts against non-existent email addresses are silently discarded with a generic 401 to prevent user enumeration.
+</Note>
+
+---
+
+## POST /api/auth/forgot-password
+
+Sends a 6-digit numeric reset code to the given email address. The code expires in 15 minutes.
+
+<ParamField body="email" type="string" required>
+  Email address associated with the account.
+</ParamField>
+
+### Responses
+
+<ResponseField name="message" type="string">
+  Confirmation that the code was sent.
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  The address the code was sent to.
+</ResponseField>
+
+<CodeGroup>
+
+```bash Forgot password
+curl -X POST https://your-api.up.railway.app/api/auth/forgot-password \
+  -H "Content-Type: application/json" \
+  -d '{"email": "student@itfip.edu.co"}'
+```
+
+</CodeGroup>
+
+**200 — Code sent**
+
+```json
+{
+  "message": "Código enviado exitosamente",
+  "email": "student@itfip.edu.co"
+}
+```
+
+**422 — Validation error**
+
+```json
+{
+  "message": "The email field is required.",
+  "errors": { "email": ["El correo es requerido"] }
+}
+```
+
+---
+
+## POST /api/auth/verify-code
+
+Verifies the 6-digit code sent by `/api/auth/forgot-password` without resetting the password yet. This is step two of the three-step reset flow.
+
+<ParamField body="email" type="string" required>
+  The account email address.
+</ParamField>
+
+<ParamField body="code" type="string" required>
+  The 6-digit numeric code from the reset email. Must be exactly 6 characters.
+</ParamField>
+
+### Responses
+
+<ResponseField name="message" type="string">
+  `"Código verificado"` on success.
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  Echoes back the verified email address.
+</ResponseField>
+
+<CodeGroup>
+
+```bash Verify code
+curl -X POST https://your-api.up.railway.app/api/auth/verify-code \
+  -H "Content-Type: application/json" \
+  -d '{"email": "student@itfip.edu.co", "code": "482910"}'
+```
+
+</CodeGroup>
+
+**200 — Code valid**
+
+```json
+{
+  "message": "Código verificado",
+  "email": "student@itfip.edu.co"
+}
+```
+
+**422 — Code wrong or expired**
+
+```json
+{ "message": "Código incorrecto" }
+```
+
+---
+
+## POST /api/auth/reset-password
+
+Resets the account password. Requires the same verified code from the previous step. This is the final step of the password reset flow.
+
+<ParamField body="email" type="string" required>
+  The account email address.
+</ParamField>
+
+<ParamField body="code" type="string" required>
+  The 6-digit reset code. Must be exactly 6 characters.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  The new password. Minimum 8 characters.
+</ParamField>
+
+<ParamField body="password_confirmation" type="string" required>
+  Must match `password`.
+</ParamField>
+
+### Responses
+
+<ResponseField name="message" type="string">
+  `"Contraseña actualizada exitosamente"` on success.
+</ResponseField>
+
+<CodeGroup>
+
+```bash Reset password
+curl -X POST https://your-api.up.railway.app/api/auth/reset-password \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "student@itfip.edu.co",
+    "code": "482910",
+    "password": "newSecret99",
+    "password_confirmation": "newSecret99"
+  }'
+```
+
+</CodeGroup>
+
+**200 — Password updated**
+
+```json
+{ "message": "Contraseña actualizada exitosamente" }
+```
+
+**422 — Code invalid or expired**
+
+```json
+{ "message": "Código inválido o expirado" }
+```
+
+---
+
+## POST /api/auth/login-with-key
+
+Authenticates a user by providing the raw content of their `.jw` secure key file. The server hashes the provided content and compares it against the stored hash for the account. This is an alternative login path for users who have lost their password.
+
+<ParamField body="email" type="string" required>
+  The account email address.
+</ParamField>
+
+<ParamField body="secure_key_content" type="string" required>
+  Full text content of the `.jw` key file.
+</ParamField>
+
+### Responses
+
+<ResponseField name="message" type="string">
+  Human-readable result.
+</ResponseField>
+
+<ResponseField name="token" type="string">
+  Sanctum bearer token for the authenticated session.
+</ResponseField>
+
+<ResponseField name="user" type="object">
+  Full user model data.
+</ResponseField>
+
+<CodeGroup>
+
+```bash Login with key
+curl -X POST https://your-api.up.railway.app/api/auth/login-with-key \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "student@itfip.edu.co",
+    "secure_key_content": "<contents of your .jw file>"
+  }'
+```
+
+</CodeGroup>
+
+**200 — Access granted**
+
+```json
+{
+  "message": "Acceso concedido con clave segura",
+  "token": "2|xyz789...",
+  "user": { "id": 42, "email": "student@itfip.edu.co" }
+}
+```
+
+**401 — Key does not match**
+
+```json
+{ "message": "Archivo de clave segura inválido" }
+```
+
+**404 — User not found**
+
+```json
+{ "message": "Usuario no encontrado o sin clave segura" }
+```
+
+<Tip>
+  The `.jw` file can be obtained via `GET /api/auth/secure-key-download` or requested by email via `POST /api/auth/send-secure-key-email`. See the [Registration endpoints](/api/auth/register) page for details.
+</Tip>
+
+---
+
+## POST /api/auth/logout
+
+Revokes the bearer token used in the current request. Requires authentication.
+
+**Headers**
+
+| Header | Value |
+|---|---|
+| `Authorization` | `Bearer {token}` |
+
+### Responses
+
+<ResponseField name="message" type="string">
+  `"Sesión cerrada exitosamente"` on success.
+</ResponseField>
+
+<CodeGroup>
+
+```bash Logout
+curl -X POST https://your-api.up.railway.app/api/auth/logout \
+  -H "Authorization: Bearer 1|abc123..."
+```
+
+</CodeGroup>
+
+**200 — Logged out**
+
+```json
+{ "message": "Sesión cerrada exitosamente" }
+```
+
+**401 — Missing or invalid token**
+
+```json
+{ "message": "Unauthenticated." }
+```
